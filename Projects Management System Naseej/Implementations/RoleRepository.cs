@@ -7,9 +7,9 @@ namespace Projects_Management_System_Naseej.Implementations
 {
     public class RoleRepository : IRoleRepository
     {
-        private readonly MyDbContex _context;
+        private readonly MyDbContext _context;
 
-        public RoleRepository(MyDbContex context)
+        public RoleRepository(MyDbContext context)
         {
             _context = context;
         }

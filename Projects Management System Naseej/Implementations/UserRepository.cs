@@ -14,9 +14,9 @@ namespace Projects_Management_System_Naseej.Implementations
 {
     public class UserRepository : IUserRepository
     {
-        private readonly MyDbContex _context;
+        private readonly MyDbContext _context;
 
-        public UserRepository(MyDbContex context)
+        public UserRepository(MyDbContext context)
         {
             _context = context;
         }
@@ -56,6 +56,7 @@ namespace Projects_Management_System_Naseej.Implementations
                 FirstName = user.FirstName,
                 LastName = user.LastName,
                 IsActive = user.IsActive ?? false,
+                PasswordHash = user.PasswordHash,
                 CreatedDate = user.CreatedDate ?? DateTime.MinValue,
                 UpdatedDate = user.UpdatedDate,
                 Roles = user.UserRoleUsers.Select(ur => ur.Role.RoleName).ToList()
@@ -171,6 +172,7 @@ namespace Projects_Management_System_Naseej.Implementations
                 return BitConverter.ToString(hashedBytes).Replace("-", "").ToLower();
             }
         }
+
     }
 }
 

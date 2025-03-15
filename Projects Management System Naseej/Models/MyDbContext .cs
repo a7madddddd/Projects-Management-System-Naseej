@@ -4,13 +4,13 @@ using Microsoft.EntityFrameworkCore;
 
 namespace Projects_Management_System_Naseej.Models;
 
-public partial class MyDbContex : DbContext
+public partial class MyDbContext : DbContext
 {
-    public MyDbContex()
+    public MyDbContext()
     {
     }
 
-    public MyDbContex(DbContextOptions<MyDbContex> options)
+    public MyDbContext(DbContextOptions<MyDbContext> options)
         : base(options)
     {
     }

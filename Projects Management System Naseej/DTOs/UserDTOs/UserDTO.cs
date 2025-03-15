@@ -11,5 +11,7 @@
         public DateTime CreatedDate { get; set; }
         public DateTime? UpdatedDate { get; set; }
         public List<string> Roles { get; set; }
+        public string PasswordHash { get; set; } = null!;
+
     }
 }

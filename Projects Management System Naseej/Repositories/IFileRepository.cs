@@ -15,5 +15,7 @@ namespace Projects_Management_System_Naseej.Repositories
         Task<byte[]> DownloadFileAsync(int fileId);
         Task SetFilePermissionsAsync(int fileId, Dictionary<int, bool> permissions);
         Task<Dictionary<int, bool>> GetFilePermissionsAsync(int fileId);
+        Task<FileConversionDTO> ConvertFileAsync(int fileId, string targetExtension);
+
     }
 }

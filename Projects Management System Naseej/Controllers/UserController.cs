@@ -130,7 +130,7 @@ namespace Projects_Management_System_Naseej.Controllers
             try
             {
                 // In a real application, you would need to get the current user's ID from the context
-                int assignedBy = 1; // Placeholder for the current user's ID
+                int assignedBy = userId; // Placeholder for the current user's ID
 
                 await _userRepository.AssignRoleToUserAsync(userId, roleId, assignedBy);
                 return NoContent();

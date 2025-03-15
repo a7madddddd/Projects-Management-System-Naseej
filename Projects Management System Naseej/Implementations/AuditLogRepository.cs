@@ -7,12 +7,28 @@ namespace Projects_Management_System_Naseej.Implementations
 {
     public class AuditLogRepository : IAuditLogRepository
     {
-        private readonly MyDbContex _context;
+        private readonly MyDbContext _context;
+        private readonly IHttpContextAccessor _httpContextAccessor;
 
-        public AuditLogRepository(MyDbContex context)
+        public AuditLogRepository(MyDbContext context, IHttpContextAccessor httpContextAccessor)
         {
             _context = context;
+            _httpContextAccessor = httpContextAccessor;
         }
+
+
+        private string GetClientIpAddress()
+        {
+            var httpContext = _httpContextAccessor.HttpContext;
+            if (httpContext == null)
+            {
+                return "Unknown";
+            }
+
+            var ipAddress = httpContext.Connection.RemoteIpAddress?.ToString();
+            return ipAddress ?? "Unknown";
+        }
+
 
         public async Task<IEnumerable<AuditLogDTO>> GetAllAuditLogsAsync()
         {
@@ -55,7 +71,7 @@ namespace Projects_Management_System_Naseej.Implementations
                 ActionType = logDTO.ActionType,
                 FileId = logDTO.FileId,
                 ActionDate = DateTime.Now,
-                Ipaddress = logDTO.Ipaddress,
+                Ipaddress = GetClientIpAddress(),
                 Details = logDTO.Details
             };
 
@@ -72,6 +88,21 @@ namespace Projects_Management_System_Naseej.Implementations
                 Ipaddress = log.Ipaddress,
                 Details = log.Details
             };
+        }
+
+        public async Task LogAuditAsync(int userId, string actionType, int? fileId, string details)
+        {
+            var auditLog = new AuditLog
+            {
+                UserId = userId,
+                ActionType = actionType,
+                FileId = fileId,
+                ActionDate = DateTime.Now,
+                Ipaddress = GetClientIpAddress(),
+                Details = details
+            };
+            _context.AuditLogs.Add(auditLog);
+            await _context.SaveChangesAsync();
         }
 
         public async Task<IEnumerable<AuditLogDTO>> GetAuditLogsByUserIdAsync(int userId)

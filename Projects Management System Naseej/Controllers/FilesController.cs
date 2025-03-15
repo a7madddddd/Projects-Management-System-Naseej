@@ -1,4 +1,5 @@
-﻿using Microsoft.AspNetCore.Http;
+﻿using Microsoft.AspNetCore.Authorization;
+using Microsoft.AspNetCore.Http;
 using Microsoft.AspNetCore.Mvc;
 using Projects_Management_System_Naseej.DTOs.FileDTOs;
 using Projects_Management_System_Naseej.Repositories;
@@ -7,6 +8,7 @@ namespace Projects_Management_System_Naseej.Controllers
 {
     [Route("api/[controller]")]
     [ApiController]
+    [Authorize(Policy = "Admin")]
     public class FilesController : ControllerBase
     {
         private readonly IFileRepository _fileRepository;

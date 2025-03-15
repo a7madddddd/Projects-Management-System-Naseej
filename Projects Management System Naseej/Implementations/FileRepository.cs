@@ -21,13 +21,15 @@ namespace Projects_Management_System_Naseej.Implementations
 {
     public class FileRepository : IFileRepository
     {
-        private readonly MyDbContex _context;
+        private readonly MyDbContext _context;
         private readonly IEnumerable<IFileTypeHandler> _fileTypeHandlers;
+        private readonly IHttpContextAccessor _httpContextAccessor;
 
-        public FileRepository(MyDbContex context, IEnumerable<IFileTypeHandler> fileTypeHandlers)
+        public FileRepository(MyDbContext context, IEnumerable<IFileTypeHandler> fileTypeHandlers, IHttpContextAccessor httpContextAccessor)
         {
             _context = context;
             _fileTypeHandlers = fileTypeHandlers;
+            _httpContextAccessor = httpContextAccessor;
         }
 
         public async Task<IEnumerable<FileDTO>> GetFilesAsync()
@@ -321,7 +323,7 @@ namespace Projects_Management_System_Naseej.Implementations
                     ActionType = "Convert",
                     FileId = fileId,
                     ActionDate = DateTime.Now,
-                    Ipaddress = "127.0.0.1", // Replace with actual IP
+                    Ipaddress = GetClientIpAddress(),
                     Details = $"Converted from {file.FileExtension} to {targetExtension}"
                 };
                 _context.AuditLogs.Add(auditLog);
@@ -338,19 +340,16 @@ namespace Projects_Management_System_Naseej.Implementations
         }
 
 
-        public async Task LogAuditAsync(int userId, string actionType, int? fileId, string details)
+        private string GetClientIpAddress()
         {
-            var auditLog = new AuditLog
+            var httpContext = _httpContextAccessor.HttpContext;
+            if (httpContext == null)
             {
-                UserId = userId,
-                ActionType = actionType,
-                FileId = fileId,
-                ActionDate = DateTime.Now,
-                Ipaddress = "127.0.0.1", // Replace with actual IP
-                Details = details
-            };
-            _context.AuditLogs.Add(auditLog);
-            await _context.SaveChangesAsync();
+                return "Unknown";
+            }
+
+            var ipAddress = httpContext.Connection.RemoteIpAddress?.ToString();
+            return ipAddress ?? "Unknown";
         }
     }
 }

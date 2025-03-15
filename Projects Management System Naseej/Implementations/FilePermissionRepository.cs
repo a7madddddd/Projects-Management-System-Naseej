@@ -7,9 +7,9 @@ namespace Projects_Management_System_Naseej.Implementations
 {
     public class FilePermissionRepository : IFilePermissionRepository
     {
-        private readonly MyDbContex _context;
+        private readonly MyDbContext _context;
 
-        public FilePermissionRepository(MyDbContex context)
+        public FilePermissionRepository(MyDbContext context)
         {
             _context = context;
         }
