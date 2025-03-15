@@ -1,0 +1,6 @@
+@Projects_Management_System_Naseej_HostAddress = http://localhost:5270
+
+GET {{Projects_Management_System_Naseej_HostAddress}}/weatherforecast/
+Accept: application/json
+
+###
