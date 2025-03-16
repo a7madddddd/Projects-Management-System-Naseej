@@ -1,5 +1,6 @@
 ﻿using Microsoft.AspNetCore.Http;
 using Microsoft.AspNetCore.Mvc;
+using Microsoft.Extensions.Configuration;
 using Microsoft.IdentityModel.Tokens;
 using Projects_Management_System_Naseej.Repositories;
 using System.IdentityModel.Tokens.Jwt;
@@ -15,11 +16,13 @@ namespace Projects_Management_System_Naseej.Controllers
     {
         private readonly IUserRepository _userRepository;
         private readonly IRoleRepository _roleRepository;
+        private readonly IConfiguration _configuration;
 
-        public AccountController(IUserRepository userRepository, IRoleRepository roleRepository)
+        public AccountController(IUserRepository userRepository, IRoleRepository roleRepository, IConfiguration configuration)
         {
             _userRepository = userRepository;
             _roleRepository = roleRepository;
+            _configuration = configuration;
         }
 
         [HttpPost("login")]
@@ -30,10 +33,10 @@ namespace Projects_Management_System_Naseej.Controllers
                 return BadRequest(ModelState);
             }
 
-            var user = await _userRepository.GetUserByIdAsync(loginDTO.UserId);
+            var user = await _userRepository.GetUserByUsernameOrEmailAsync(loginDTO.UsernameOrEmail);
             if (user != null && user.PasswordHash == HashPassword(loginDTO.Password))
             {
-                var userRoles = await _userRepository.GetUserRolesAsync(loginDTO.UserId);
+                var userRoles = await _userRepository.GetUserRolesAsync(user.UserId);
 
                 var claims = new[]
                 {
@@ -41,12 +44,12 @@ namespace Projects_Management_System_Naseej.Controllers
                     new Claim("UserId", user.UserId.ToString())
                 }.Concat(userRoles.Select(role => new Claim(ClaimTypes.Role, role)));
 
-                var key = new SymmetricSecurityKey(Encoding.UTF8.GetBytes("YourSecretKeyHere")); // Replace with your secret key
+                var key = new SymmetricSecurityKey(Encoding.UTF8.GetBytes(_configuration["Jwt:Key"]));
                 var creds = new SigningCredentials(key, SecurityAlgorithms.HmacSha256);
 
                 var token = new JwtSecurityToken(
-                    issuer: "YourIssuer",
-                    audience: "YourAudience",
+                    issuer: _configuration["Jwt:Issuer"],
+                    audience: _configuration["Jwt:Audience"],
                     claims: claims,
                     expires: DateTime.Now.AddMinutes(30),
                     signingCredentials: creds);
@@ -58,7 +61,7 @@ namespace Projects_Management_System_Naseej.Controllers
                 });
             }
 
-            return Unauthorized("Invalid user ID or password.");
+            return Unauthorized("Invalid username, email, or password.");
         }
 
         private string HashPassword(string password)
@@ -69,6 +72,5 @@ namespace Projects_Management_System_Naseej.Controllers
                 return BitConverter.ToString(hashedBytes).Replace("-", "").ToLower();
             }
         }
-
     }
 }

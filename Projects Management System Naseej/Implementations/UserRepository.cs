@@ -32,6 +32,7 @@ namespace Projects_Management_System_Naseej.Implementations
                     FirstName = u.FirstName,
                     LastName = u.LastName,
                     IsActive = u.IsActive ?? false,
+                    PasswordHash = u.PasswordHash,
                     CreatedDate = u.CreatedDate ?? DateTime.MinValue,
                     UpdatedDate = u.UpdatedDate,
                     Roles = u.UserRoleUsers.Select(ur => ur.Role.RoleName).ToList()
@@ -87,9 +88,10 @@ namespace Projects_Management_System_Naseej.Implementations
                 FirstName = user.FirstName,
                 LastName = user.LastName,
                 IsActive = user.IsActive ?? false,
+                PasswordHash = user.PasswordHash,
                 CreatedDate = user.CreatedDate ?? DateTime.MinValue,
                 UpdatedDate = user.UpdatedDate,
-                Roles = new List<string>() // Initially, no roles are assigned
+                Roles = new List<string>() 
             };
         }
 
@@ -162,6 +164,31 @@ namespace Projects_Management_System_Naseej.Implementations
                 _context.UserRoles.Remove(userRole);
                 await _context.SaveChangesAsync();
             }
+        }
+
+        public async Task<UserDTO> GetUserByUsernameOrEmailAsync(string usernameOrEmail)
+        {
+            var user = await _context.Users
+                .FirstOrDefaultAsync(u => u.Username == usernameOrEmail || u.Email == usernameOrEmail);
+
+            if (user == null) return null;
+
+            return new UserDTO
+            {
+                UserId = user.UserId,
+                Username = user.Username,
+                Email = user.Email,
+                FirstName = user.FirstName,
+                LastName = user.LastName,
+                IsActive = user.IsActive ?? false,
+                PasswordHash = user.PasswordHash,
+                CreatedDate = user.CreatedDate ?? DateTime.MinValue,
+                UpdatedDate = user.UpdatedDate,
+                Roles = await _context.UserRoles
+                    .Where(ur => ur.UserId == user.UserId)
+                    .Select(ur => ur.Role.RoleName)
+                    .ToListAsync()
+            };
         }
 
         private string HashPassword(string password)

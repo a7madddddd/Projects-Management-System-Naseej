@@ -5,16 +5,7 @@ using Projects_Management_System_Naseej.DTOs.UserDTOs;
 using Projects_Management_System_Naseej.Models;
 using Projects_Management_System_Naseej.Repositories;
 using File = Projects_Management_System_Naseej.Models.File;
-using Projects_Management_System_Naseej.DTOs.FileDTOs;
-using System;
-using System.Collections.Generic;
-using System.IO;
-using System.Linq;
-using System.Threading.Tasks;
-using Microsoft.AspNetCore.Http;
-using Microsoft.EntityFrameworkCore;
-using Projects_Management_System_Naseej.Models;
-using iText.Commons.Actions.Contexts;
+
 using System.Threading.Tasks;
 
 namespace Projects_Management_System_Naseej.Implementations
@@ -31,6 +22,28 @@ namespace Projects_Management_System_Naseej.Implementations
             _fileTypeHandlers = fileTypeHandlers;
             _httpContextAccessor = httpContextAccessor;
         }
+
+        private async Task ValidateFile(IFormFile file)
+        {
+            if (file.Length == 0)
+            {
+                throw new ArgumentException("File is empty.");
+            }
+
+            if (file.Length > 10 * 1024 * 1024) // 10 MB
+            {
+                throw new ArgumentException("File size exceeds the maximum allowed size of 10 MB.");
+            }
+
+            var allowedExtensions = new[] { ".pdf", ".xlsx", ".xls", ".docx", ".txt" };
+            var fileExtension = Path.GetExtension(file.FileName).ToLower();
+            if (!allowedExtensions.Contains(fileExtension))
+            {
+                throw new ArgumentException("Invalid file type. Allowed types are: PDF, Excel, Word, and Text.");
+            }
+        }
+
+
 
         public async Task<IEnumerable<FileDTO>> GetFilesAsync()
         {
@@ -81,6 +94,7 @@ namespace Projects_Management_System_Naseej.Implementations
             using (var stream = new FileStream(filePath, FileMode.Create))
             {
                 await file.CopyToAsync(stream);
+                await ValidateFile(file);
             }
 
             var newFile = new File
@@ -339,6 +353,48 @@ namespace Projects_Management_System_Naseej.Implementations
             }
         }
 
+
+        public async Task<PaginatedResult<FileDTO>> GetFilesAsync(int pageNumber = 1, int pageSize = 10)
+        {
+            var totalCount = await _context.Files.CountAsync();
+            var files = await _context.Files
+                .Skip((pageNumber - 1) * pageSize)
+                .Take(pageSize)
+                .Select(f => new FileDTO
+                {
+                    FileId = f.FileId,
+                    FileName = f.FileName,
+                    FileExtension = f.FileExtension,
+                    FilePath = f.FilePath,
+                    FileSize = f.FileSize,
+                    CategoryId = f.CategoryId,
+                    UploadedBy = f.UploadedBy,
+                    UploadDate = f.UploadDate.GetValueOrDefault(),
+                    LastModifiedBy = f.LastModifiedBy,
+                    LastModifiedDate = f.LastModifiedDate,
+                    IsActive = f.IsActive.GetValueOrDefault(),
+                    IsPublic = f.IsPublic.GetValueOrDefault()
+                })
+                .ToListAsync();
+
+            return new PaginatedResult<FileDTO>(files, totalCount, pageNumber, pageSize);
+        }
+
+        public class PaginatedResult<T>
+        {
+            public List<T> Items { get; set; }
+            public int TotalCount { get; set; }
+            public int PageNumber { get; set; }
+            public int PageSize { get; set; }
+
+            public PaginatedResult(List<T> items, int totalCount, int pageNumber, int pageSize)
+            {
+                Items = items;
+                TotalCount = totalCount;
+                PageNumber = pageNumber;
+                PageSize = pageSize;
+            }
+        }
 
         private string GetClientIpAddress()
         {

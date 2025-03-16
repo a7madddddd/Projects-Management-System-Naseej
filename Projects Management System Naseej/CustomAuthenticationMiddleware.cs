@@ -9,16 +9,20 @@ using System.Security.Claims;
 using System.Text;
 using System.Threading.Tasks;
 using Microsoft.IdentityModel.Tokens;
+using System.Security.Cryptography;
+using Microsoft.Extensions.Configuration;
 
 public class CustomAuthenticationMiddleware
 {
     private readonly RequestDelegate _next;
     private readonly ILogger<CustomAuthenticationMiddleware> _logger;
+    private readonly IConfiguration _configuration;
 
-    public CustomAuthenticationMiddleware(RequestDelegate next, ILogger<CustomAuthenticationMiddleware> logger)
+    public CustomAuthenticationMiddleware(RequestDelegate next, ILogger<CustomAuthenticationMiddleware> logger, IConfiguration configuration)
     {
         _next = next;
         _logger = logger;
+        _configuration = configuration;
     }
 
     public async Task InvokeAsync(HttpContext context)
@@ -30,13 +34,15 @@ public class CustomAuthenticationMiddleware
             try
             {
                 var tokenHandler = new JwtSecurityTokenHandler();
-                var key = Encoding.ASCII.GetBytes("YourSecretKeyHere"); // Replace with your secret key
+                var key = Encoding.UTF8.GetBytes(_configuration["Jwt:Key"]); // Use the configuration key
                 tokenHandler.ValidateToken(token, new TokenValidationParameters
                 {
                     ValidateIssuerSigningKey = true,
                     IssuerSigningKey = new SymmetricSecurityKey(key),
-                    ValidateIssuer = false,
-                    ValidateAudience = false,
+                    ValidateIssuer = true,
+                    ValidateAudience = true,
+                    ValidIssuer = _configuration["Jwt:Issuer"],
+                    ValidAudience = _configuration["Jwt:Audience"],
                     ClockSkew = TimeSpan.Zero
                 }, out SecurityToken validatedToken);
 

@@ -13,5 +13,6 @@ namespace Projects_Management_System_Naseej.Repositories
         Task<IEnumerable<string>> GetUserRolesAsync(int userId);
         Task AssignRoleToUserAsync(int userId, int roleId, int assignedBy);
         Task RemoveRoleFromUserAsync(int userId, int roleId);
+        Task<UserDTO> GetUserByUsernameOrEmailAsync(string usernameOrEmail);
     }
 }
