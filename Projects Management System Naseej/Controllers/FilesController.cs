@@ -8,7 +8,7 @@ namespace Projects_Management_System_Naseej.Controllers
 {
     [Route("api/[controller]")]
     [ApiController]
-    [Authorize(Policy = "Admin")]
+    //[Authorize]
     public class FilesController : ControllerBase
     {
         private readonly IFileRepository _fileRepository;
@@ -53,6 +53,7 @@ namespace Projects_Management_System_Naseej.Controllers
         }
 
         [HttpPost]
+        [Authorize(Policy = "Uploader")]
         public async Task<ActionResult<FileDTO>> UploadFile(IFormFile file, [FromForm] CreateFileDTO createFileDTO)
         {
             try
@@ -67,20 +68,28 @@ namespace Projects_Management_System_Naseej.Controllers
                     return BadRequest(ModelState);
                 }
 
-                // In a real application, you would need to get the current user's ID from the context
-                int uploadedBy = 1; // Placeholder for the current user's ID
+                var userIdClaim = User.FindFirst("UserId");
+                if (userIdClaim == null)
+                {
+                    return Unauthorized("User ID not found in the token.");
+                }
+
+                if (!int.TryParse(userIdClaim.Value, out int uploadedBy))
+                {
+                    return BadRequest("Invalid user ID in the token.");
+                }
 
                 var uploadedFile = await _fileRepository.UploadFileAsync(file, uploadedBy, createFileDTO.CategoryId, createFileDTO);
                 return CreatedAtAction(nameof(GetFileById), new { fileId = uploadedFile.FileId }, uploadedFile);
             }
             catch (Exception ex)
             {
-                // Log the exception
                 return StatusCode(500, "An error occurred while uploading the file.");
             }
         }
 
         [HttpPut("{fileId}")]
+        [Authorize(Policy = "Editor")]
         public async Task<ActionResult<FileDTO>> UpdateFile(int fileId, IFormFile file, [FromForm] UpdateFileDTO updateFileDTO)
         {
             try
@@ -90,8 +99,16 @@ namespace Projects_Management_System_Naseej.Controllers
                     return BadRequest(ModelState);
                 }
 
-                // In a real application, you would need to get the current user's ID from the context
-                int updatedBy = 1; // Placeholder for the current user's ID
+                var userIdClaim = User.FindFirst("UserId");
+                if (userIdClaim == null)
+                {
+                    return Unauthorized("User ID not found in the token.");
+                }
+
+                if (!int.TryParse(userIdClaim.Value, out int updatedBy))
+                {
+                    return BadRequest("Invalid user ID in the token.");
+                }
 
                 var updatedFile = await _fileRepository.UpdateFileAsync(fileId, file, updatedBy, updateFileDTO);
                 if (updatedFile == null)
@@ -102,12 +119,14 @@ namespace Projects_Management_System_Naseej.Controllers
             }
             catch (Exception ex)
             {
-                // Log the exception
                 return StatusCode(500, "An error occurred while updating the file.");
             }
         }
 
+
+
         [HttpDelete("{fileId}")]
+        [Authorize(Policy = "Admin")]
         public async Task<IActionResult> DeleteFile(int fileId)
         {
             try
@@ -117,10 +136,10 @@ namespace Projects_Management_System_Naseej.Controllers
             }
             catch (Exception ex)
             {
-                // Log the exception
                 return StatusCode(500, "An error occurred while deleting the file.");
             }
         }
+
 
         [HttpGet("category/{categoryId}")]
         public async Task<ActionResult<IEnumerable<FileDTO>>> GetFilesByCategory(int categoryId)
@@ -168,6 +187,7 @@ namespace Projects_Management_System_Naseej.Controllers
         }
 
         [HttpGet("{fileId}/download")]
+        [Authorize(Policy = "Viewer")]
         public async Task<IActionResult> DownloadFile(int fileId)
         {
             try
@@ -183,7 +203,6 @@ namespace Projects_Management_System_Naseej.Controllers
             }
             catch (Exception ex)
             {
-                // Log the exception
                 return StatusCode(500, "An error occurred while downloading the file.");
             }
         }

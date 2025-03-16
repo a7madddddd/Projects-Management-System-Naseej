@@ -45,6 +45,7 @@ builder.Services.AddAuthentication(options =>
         ValidAudience = builder.Configuration["Jwt:Audience"],
         IssuerSigningKey = new SymmetricSecurityKey(Encoding.UTF8.GetBytes(builder.Configuration["Jwt:Key"])) // Ensure this is 16+ characters
     };
+
 });
 
 builder.Services.AddControllers();
@@ -55,10 +56,10 @@ builder.Services.AddSwaggerGen();
 builder.Services.AddAuthorization(options =>
 {
     options.AddPolicy("SuperAdmin", policy => policy.RequireRole("SuperAdmin"));
-    options.AddPolicy("Admin", policy => policy.RequireRole("Admin"));
-    options.AddPolicy("Editor", policy => policy.RequireRole("Editor"));
-    options.AddPolicy("Viewer", policy => policy.RequireRole("Viewer"));
-    options.AddPolicy("Uploader", policy => policy.RequireRole("Uploader"));
+    options.AddPolicy("Admin", policy => policy.RequireRole("Admin", "SuperAdmin"));
+    options.AddPolicy("Editor", policy => policy.RequireRole("Editor", "Admin", "SuperAdmin"));
+    options.AddPolicy("Uploader", policy => policy.RequireRole("Uploader", "Admin", "SuperAdmin"));
+    options.AddPolicy("Viewer", policy => policy.RequireRole("Viewer", "Admin", "SuperAdmin"));
 });
 
 var app = builder.Build();

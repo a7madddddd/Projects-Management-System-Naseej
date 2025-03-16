@@ -5,5 +5,6 @@
         public string FileName { get; set; }
         public int CategoryId { get; set; }
         public bool IsPublic { get; set; }
+        public int UserId { get; set; } // Add this field
     }
 }

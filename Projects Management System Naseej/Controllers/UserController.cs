@@ -1,4 +1,5 @@
-﻿using Microsoft.AspNetCore.Http;
+﻿using Microsoft.AspNetCore.Authorization;
+using Microsoft.AspNetCore.Http;
 using Microsoft.AspNetCore.Mvc;
 using Projects_Management_System_Naseej.DTOs.UserDTOs;
 using Projects_Management_System_Naseej.Repositories;
@@ -51,6 +52,7 @@ namespace Projects_Management_System_Naseej.Controllers
         }
 
         [HttpPost]
+        [Authorize(Policy = "SuperAdmin")]
         public async Task<ActionResult<UserDTO>> CreateUser(CreateUser userDTO)
         {
             try

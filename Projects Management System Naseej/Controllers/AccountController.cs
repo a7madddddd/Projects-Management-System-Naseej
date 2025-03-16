@@ -1,4 +1,5 @@
-﻿using Microsoft.AspNetCore.Http;
+﻿using Microsoft.AspNetCore.Authorization;
+using Microsoft.AspNetCore.Http;
 using Microsoft.AspNetCore.Mvc;
 using Microsoft.Extensions.Configuration;
 using Microsoft.IdentityModel.Tokens;
@@ -41,7 +42,7 @@ namespace Projects_Management_System_Naseej.Controllers
                 var claims = new[]
                 {
                     new Claim(ClaimTypes.Name, user.Username),
-                    new Claim("UserId", user.UserId.ToString())
+                    new Claim("UserId", user.UserId.ToString()) // Ensure this claim name matches what's expected in the FilesController
                 }.Concat(userRoles.Select(role => new Claim(ClaimTypes.Role, role)));
 
                 var key = new SymmetricSecurityKey(Encoding.UTF8.GetBytes(_configuration["Jwt:Key"]));
@@ -63,6 +64,38 @@ namespace Projects_Management_System_Naseej.Controllers
 
             return Unauthorized("Invalid username, email, or password.");
         }
+
+        [HttpPost("{userId}/roles/{roleId}")]
+        [Authorize(Policy = "SuperAdmin")]
+        public async Task<IActionResult> AssignRoleToUser(int userId, int roleId)
+        {
+            try
+            {
+                // In a real application, you would need to get the current user's ID from the context
+                var currentUserIdClaim = User.FindFirst("UserId");
+                if (currentUserIdClaim == null)
+                {
+                    return Unauthorized("User ID not found in the token.");
+                }
+
+                if (!int.TryParse(currentUserIdClaim.Value, out int assignedBy))
+                {
+                    return BadRequest("Invalid user ID in the token.");
+                }
+
+                await _userRepository.AssignRoleToUserAsync(userId, roleId, assignedBy);
+                return NoContent();
+            }
+            catch (Exception ex)
+            {
+                // Log the exception
+                return StatusCode(500, "An error occurred while assigning the role to the user.");
+            }
+        }
+
+
+
+
 
         private string HashPassword(string password)
         {

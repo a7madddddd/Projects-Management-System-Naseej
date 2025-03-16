@@ -5,6 +5,7 @@ using Projects_Management_System_Naseej.DTOs.UserDTOs;
 using Projects_Management_System_Naseej.Models;
 using Projects_Management_System_Naseej.Repositories;
 using File = Projects_Management_System_Naseej.Models.File;
+using System.IO; 
 
 using System.Threading.Tasks;
 
@@ -15,12 +16,14 @@ namespace Projects_Management_System_Naseej.Implementations
         private readonly MyDbContext _context;
         private readonly IEnumerable<IFileTypeHandler> _fileTypeHandlers;
         private readonly IHttpContextAccessor _httpContextAccessor;
+        private readonly IConfiguration _configuration;
 
-        public FileRepository(MyDbContext context, IEnumerable<IFileTypeHandler> fileTypeHandlers, IHttpContextAccessor httpContextAccessor)
+        public FileRepository(MyDbContext context, IEnumerable<IFileTypeHandler> fileTypeHandlers, IHttpContextAccessor httpContextAccessor, IConfiguration configuration)
         {
             _context = context;
             _fileTypeHandlers = fileTypeHandlers;
             _httpContextAccessor = httpContextAccessor;
+            _configuration = configuration;
         }
 
         private async Task ValidateFile(IFormFile file)
@@ -88,89 +91,129 @@ namespace Projects_Management_System_Naseej.Implementations
             };
         }
 
+
         public async Task<FileDTO> UploadFileAsync(IFormFile file, int uploadedBy, int categoryId, CreateFileDTO createFileDTO)
         {
-            var filePath = Path.Combine("Uploads", file.FileName);
-            using (var stream = new FileStream(filePath, FileMode.Create))
+            try
             {
-                await file.CopyToAsync(stream);
-                await ValidateFile(file);
-            }
+                var uploadDirectory = _configuration["UploadSettings:UploadDirectory"];
+                var uploadsPath = Path.Combine(Directory.GetCurrentDirectory(), uploadDirectory);
+                if (!Directory.Exists(uploadsPath))
+                {
+                    Directory.CreateDirectory(uploadsPath);
+                }
 
-            var newFile = new File
-            {
-                FileName = createFileDTO.FileName,
-                FileExtension = Path.GetExtension(file.FileName),
-                FilePath = filePath,
-                FileSize = file.Length,
-                CategoryId = categoryId,
-                UploadedBy = uploadedBy,
-                IsPublic = createFileDTO.IsPublic
-            };
-
-            _context.Files.Add(newFile);
-            await _context.SaveChangesAsync();
-
-            return new FileDTO
-            {
-                FileId = newFile.FileId,
-                FileName = newFile.FileName,
-                FileExtension = newFile.FileExtension,
-                FilePath = newFile.FilePath,
-                FileSize = newFile.FileSize,
-                CategoryId = newFile.CategoryId,
-                UploadedBy = newFile.UploadedBy,
-                UploadDate = newFile.UploadDate ?? DateTime.MinValue,
-                IsActive = newFile.IsActive ?? false,
-                IsPublic = newFile.IsPublic ?? false,
-            };
-        }
-
-        public async Task<FileDTO> UpdateFileAsync(int fileId, IFormFile file, int updatedBy, UpdateFileDTO updateFileDTO)
-        {
-            var existingFile = await _context.Files.FindAsync(fileId);
-            if (existingFile == null) return null;
-
-            if (file != null)
-            {
-                var filePath = Path.Combine("Uploads", file.FileName);
+                var filePath = Path.Combine(uploadsPath, file.FileName);
                 using (var stream = new FileStream(filePath, FileMode.Create))
                 {
                     await file.CopyToAsync(stream);
+                    await ValidateFile(file);
                 }
 
-                existingFile.FileName = updateFileDTO.FileName ?? existingFile.FileName;
-                existingFile.FileExtension = Path.GetExtension(file.FileName);
-                existingFile.FilePath = filePath;
-                existingFile.FileSize = file.Length;
+                var newFile = new File
+                {
+                    FileName = createFileDTO.FileName,
+                    FileExtension = Path.GetExtension(file.FileName),
+                    FilePath = filePath,
+                    FileSize = file.Length,
+                    CategoryId = categoryId,
+                    UploadedBy = uploadedBy,
+                    IsPublic = createFileDTO.IsPublic
+                };
+
+                _context.Files.Add(newFile);
+                await _context.SaveChangesAsync();
+
+                return new FileDTO
+                {
+                    FileId = newFile.FileId,
+                    FileName = newFile.FileName,
+                    FileExtension = newFile.FileExtension,
+                    FilePath = newFile.FilePath,
+                    FileSize = newFile.FileSize,
+                    CategoryId = newFile.CategoryId,
+                    UploadedBy = newFile.UploadedBy,
+                    UploadDate = newFile.UploadDate ?? DateTime.MinValue,
+                    IsActive = newFile.IsActive ?? false,
+                    IsPublic = newFile.IsPublic ?? false,
+                };
             }
-            else
+            catch (Exception ex)
             {
-                existingFile.FileName = updateFileDTO.FileName ?? existingFile.FileName;
+                // Log the exception
+                throw new Exception($"An error occurred while uploading the file: {ex.Message}", ex);
             }
+        }
 
-            existingFile.CategoryId = updateFileDTO.CategoryId ?? existingFile.CategoryId;
-            existingFile.IsPublic = updateFileDTO.IsPublic ?? existingFile.IsPublic;
-            existingFile.LastModifiedBy = updatedBy;
-            existingFile.LastModifiedDate = DateTime.Now;
 
-            await _context.SaveChangesAsync();
 
-            return new FileDTO
+        public async Task<FileDTO> UpdateFileAsync(int fileId, IFormFile file, int updatedBy, UpdateFileDTO updateFileDTO)
+        {
+            try
             {
-                FileId = existingFile.FileId,
-                FileName = existingFile.FileName,
-                FileExtension = existingFile.FileExtension,
-                FilePath = existingFile.FilePath,
-                FileSize = existingFile.FileSize,
-                CategoryId = existingFile.CategoryId,
-                UploadedBy = existingFile.UploadedBy,
-                UploadDate = existingFile.UploadDate ?? DateTime.Now,
-                LastModifiedBy = existingFile.LastModifiedBy,
-                LastModifiedDate = existingFile.LastModifiedDate,
-                IsActive = existingFile.IsActive ?? false,
-                IsPublic = existingFile.IsPublic ?? false
-            };
+                var existingFile = await _context.Files.FindAsync(fileId);
+                if (existingFile == null) return null;
+
+                if (file != null)
+                {
+                    var wwwrootPath = Path.Combine(Directory.GetCurrentDirectory(), "wwwroot");
+                    var uploadsPath = Path.Combine(wwwrootPath, "Files");
+                    if (!Directory.Exists(uploadsPath))
+                    {
+                        Directory.CreateDirectory(uploadsPath);
+                    }
+
+                    // Delete the existing file if it exists
+                    if (System.IO.File.Exists(existingFile.FilePath))
+                    {
+                        System.IO.File.Delete(existingFile.FilePath);
+                    }
+
+                    var filePath = Path.Combine(uploadsPath, file.FileName);
+                    using (var stream = new FileStream(filePath, FileMode.Create))
+                    {
+                        await file.CopyToAsync(stream);
+                        await ValidateFile(file);
+                    }
+
+                    existingFile.FileName = updateFileDTO.FileName ?? existingFile.FileName;
+                    existingFile.FileExtension = Path.GetExtension(file.FileName);
+                    existingFile.FilePath = filePath;
+                    existingFile.FileSize = file.Length;
+                }
+                else
+                {
+                    existingFile.FileName = updateFileDTO.FileName ?? existingFile.FileName;
+                }
+
+                existingFile.CategoryId = updateFileDTO.CategoryId ?? existingFile.CategoryId;
+                existingFile.IsPublic = updateFileDTO.IsPublic ?? existingFile.IsPublic;
+                existingFile.LastModifiedBy = updatedBy;
+                existingFile.LastModifiedDate = DateTime.Now;
+
+                await _context.SaveChangesAsync();
+
+                return new FileDTO
+                {
+                    FileId = existingFile.FileId,
+                    FileName = existingFile.FileName,
+                    FileExtension = existingFile.FileExtension,
+                    FilePath = existingFile.FilePath,
+                    FileSize = existingFile.FileSize,
+                    CategoryId = existingFile.CategoryId,
+                    UploadedBy = existingFile.UploadedBy,
+                    UploadDate = existingFile.UploadDate ?? DateTime.MinValue,
+                    LastModifiedBy = existingFile.LastModifiedBy,
+                    LastModifiedDate = existingFile.LastModifiedDate,
+                    IsActive = existingFile.IsActive ?? false,
+                    IsPublic = existingFile.IsPublic ?? false
+                };
+            }
+            catch (Exception ex)
+            {
+                
+                throw new Exception($"An error occurred while updating the file: {ex.Message}", ex);
+            }
         }
 
         public async Task DeleteFileAsync(int fileId)
@@ -380,21 +423,7 @@ namespace Projects_Management_System_Naseej.Implementations
             return new PaginatedResult<FileDTO>(files, totalCount, pageNumber, pageSize);
         }
 
-        public class PaginatedResult<T>
-        {
-            public List<T> Items { get; set; }
-            public int TotalCount { get; set; }
-            public int PageNumber { get; set; }
-            public int PageSize { get; set; }
 
-            public PaginatedResult(List<T> items, int totalCount, int pageNumber, int pageSize)
-            {
-                Items = items;
-                TotalCount = totalCount;
-                PageNumber = pageNumber;
-                PageSize = pageSize;
-            }
-        }
 
         private string GetClientIpAddress()
         {

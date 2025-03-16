@@ -11,6 +11,7 @@ using System.Threading.Tasks;
 using Microsoft.IdentityModel.Tokens;
 using System.Security.Cryptography;
 using Microsoft.Extensions.Configuration;
+using Microsoft.AspNetCore.Authorization;
 
 public class CustomAuthenticationMiddleware
 {
@@ -27,48 +28,51 @@ public class CustomAuthenticationMiddleware
 
     public async Task InvokeAsync(HttpContext context)
     {
-        var token = context.Request.Headers["Authorization"].FirstOrDefault()?.Split(" ").Last();
-
-        if (token != null)
+        if (context.GetEndpoint()?.Metadata?.GetMetadata<IAuthorizeData>() != null)
         {
-            try
+            var token = context.Request.Headers["Authorization"].FirstOrDefault()?.Split(" ").Last();
+
+            if (token != null)
             {
-                var tokenHandler = new JwtSecurityTokenHandler();
-                var key = Encoding.UTF8.GetBytes(_configuration["Jwt:Key"]); // Use the configuration key
-                tokenHandler.ValidateToken(token, new TokenValidationParameters
+                try
                 {
-                    ValidateIssuerSigningKey = true,
-                    IssuerSigningKey = new SymmetricSecurityKey(key),
-                    ValidateIssuer = true,
-                    ValidateAudience = true,
-                    ValidIssuer = _configuration["Jwt:Issuer"],
-                    ValidAudience = _configuration["Jwt:Audience"],
-                    ClockSkew = TimeSpan.Zero
-                }, out SecurityToken validatedToken);
-
-                var jwtToken = (JwtSecurityToken)validatedToken;
-                var userId = int.Parse(jwtToken.Claims.First(x => x.Type == "UserId").Value);
-
-                // Use a scoped service to resolve IUserRepository
-                var userRepository = context.RequestServices.GetRequiredService<IUserRepository>();
-                var user = await userRepository.GetUserByIdAsync(userId);
-
-                if (user != null)
-                {
-                    var userRoles = await userRepository.GetUserRolesAsync(userId);
-                    var claims = new[]
+                    var tokenHandler = new JwtSecurityTokenHandler();
+                    var key = Encoding.UTF8.GetBytes(_configuration["Jwt:Key"]); // Use the configuration key
+                    tokenHandler.ValidateToken(token, new TokenValidationParameters
                     {
-                        new Claim(ClaimTypes.Name, user.Username),
-                        new Claim("UserId", user.UserId.ToString())
-                    }.Concat(userRoles.Select(role => new Claim(ClaimTypes.Role, role)));
+                        ValidateIssuerSigningKey = true,
+                        IssuerSigningKey = new SymmetricSecurityKey(key),
+                        ValidateIssuer = true,
+                        ValidateAudience = true,
+                        ValidIssuer = _configuration["Jwt:Issuer"],
+                        ValidAudience = _configuration["Jwt:Audience"],
+                        ClockSkew = TimeSpan.Zero
+                    }, out SecurityToken validatedToken);
 
-                    var identity = new ClaimsIdentity(claims, "Custom");
-                    context.User = new ClaimsPrincipal(identity);
+                    var jwtToken = (JwtSecurityToken)validatedToken;
+                    var userId = int.Parse(jwtToken.Claims.First(x => x.Type == "UserId").Value);
+
+                    // Use a scoped service to resolve IUserRepository
+                    var userRepository = context.RequestServices.GetRequiredService<IUserRepository>();
+                    var user = await userRepository.GetUserByIdAsync(userId);
+
+                    if (user != null)
+                    {
+                        var userRoles = await userRepository.GetUserRolesAsync(userId);
+                        var claims = new[]
+                        {
+                            new Claim(ClaimTypes.Name, user.Username),
+                            new Claim("UserId", user.UserId.ToString())
+                        }.Concat(userRoles.Select(role => new Claim(ClaimTypes.Role, role)));
+
+                        var identity = new ClaimsIdentity(claims, "Custom");
+                        context.User = new ClaimsPrincipal(identity);
+                    }
                 }
-            }
-            catch (Exception ex)
-            {
-                _logger.LogError($"Error authenticating user: {ex.Message}");
+                catch (Exception ex)
+                {
+                    _logger.LogError($"Error authenticating user: {ex.Message}");
+                }
             }
         }
 
