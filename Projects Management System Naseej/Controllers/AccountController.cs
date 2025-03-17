@@ -39,11 +39,18 @@ namespace Projects_Management_System_Naseej.Controllers
             {
                 var userRoles = await _userRepository.GetUserRolesAsync(user.UserId);
 
-                var claims = new[]
+                var claims = new List<Claim>
+        {
+            new Claim(ClaimTypes.Name, user.Username),
+            new Claim(ClaimTypes.NameIdentifier, user.UserId.ToString()),
+            new Claim("UserId", user.UserId.ToString())
+        };
+
+                // Add role claims
+                foreach (var role in userRoles)
                 {
-                    new Claim(ClaimTypes.Name, user.Username),
-                    new Claim("UserId", user.UserId.ToString()) // Ensure this claim name matches what's expected in the FilesController
-                }.Concat(userRoles.Select(role => new Claim(ClaimTypes.Role, role)));
+                    claims.Add(new Claim(ClaimTypes.Role, role));
+                }
 
                 var key = new SymmetricSecurityKey(Encoding.UTF8.GetBytes(_configuration["Jwt:Key"]));
                 var creds = new SigningCredentials(key, SecurityAlgorithms.HmacSha256);
@@ -52,13 +59,16 @@ namespace Projects_Management_System_Naseej.Controllers
                     issuer: _configuration["Jwt:Issuer"],
                     audience: _configuration["Jwt:Audience"],
                     claims: claims,
-                    expires: DateTime.Now.AddMinutes(30),
+                    expires: DateTime.Now.AddHours(1),
                     signingCredentials: creds);
 
                 return Ok(new
                 {
                     token = new JwtSecurityTokenHandler().WriteToken(token),
-                    expiration = token.ValidTo
+                    expiration = token.ValidTo,
+                    userId = user.UserId,
+                    username = user.Username,
+                    roles = userRoles
                 });
             }
 
