@@ -13,6 +13,7 @@ namespace Projects_Management_System_Naseej.Controllers
 {
     [Route("api/[controller]")]
     [ApiController]
+    [AutoValidateAntiforgeryToken]
     public class FilesController : ControllerBase
     {
         private readonly IFileRepository _fileRepository;
@@ -25,7 +26,6 @@ namespace Projects_Management_System_Naseej.Controllers
         }
 
         [HttpGet]
-        [Authorize]
         public async Task<ActionResult<IEnumerable<FileDTO>>> GetAllFiles()
         {
             try
@@ -60,8 +60,6 @@ namespace Projects_Management_System_Naseej.Controllers
         }
 
         [HttpPost]
-        // Temporarily remove the Authorize attribute for testing
-        // [Authorize(Policy = "Uploader")]
         public async Task<ActionResult<FileDTO>> UploadFile(IFormFile file, [FromForm] CreateFileDTO createFileDTO)
         {
             try
