@@ -131,9 +131,8 @@ namespace Projects_Management_System_Naseej.Controllers
 
 
 
-
         [HttpPut("{fileId}")]
-        public async Task<ActionResult<FileDTO>> UpdateFile(int fileId, IFormFile file, [FromForm] UpdateFileDTO updateFileDTO)
+        public async Task<ActionResult<FileDTO>> UpdateFile(int fileId, [FromForm] UpdateFileDTO updateFileDTO)
         {
             try
             {
@@ -153,38 +152,43 @@ namespace Projects_Management_System_Naseej.Controllers
                     return BadRequest("Invalid user ID in the token.");
                 }
 
-                var updatedFile = await _fileRepository.UpdateFileAsync(fileId, file, updatedBy, updateFileDTO);
+                var updatedFile = await _fileRepository.UpdateFileAsync(
+                    fileId,
+                    updateFileDTO.File,
+                    updatedBy,
+                    updateFileDTO
+                );
+
                 if (updatedFile == null)
                 {
                     return NotFound($"File with ID {fileId} not found.");
                 }
+
                 return Ok(updatedFile);
             }
             catch (Exception ex)
             {
-                return StatusCode(500, "An error occurred while updating the file.");
+                _logger.LogError(ex, $"Error updating file with ID: {fileId}");
+                return StatusCode(500, new { message = "An error occurred while updating the file." });
             }
         }
 
+
         [HttpGet("serve/{fileName}")]
-        public async Task<IActionResult> ServeFile(string fileName)
+        public async Task<IActionResult> ServeFile(string fileName, [FromQuery] bool view = false)
         {
             try
             {
                 // Find the file in the database
                 var file = await _context.Files
                     .FirstOrDefaultAsync(f => f.FileName + f.FileExtension == fileName);
-
                 if (file == null)
                 {
                     return NotFound($"File {fileName} not found in database.");
                 }
 
-                // Use the full file path from the database
-                var filePath = file.FilePath;
-
-                // Normalize the file path (remove duplicate wwwroot)
-                filePath = filePath.Replace("wwwroot/wwwroot", "wwwroot");
+                // Normalize the file path
+                var filePath = file.FilePath.Replace("wwwroot/wwwroot", "wwwroot");
 
                 // Check if file exists
                 if (!System.IO.File.Exists(filePath))
@@ -195,48 +199,38 @@ namespace Projects_Management_System_Naseej.Controllers
                 // Determine content type based on file extension
                 var contentType = GetContentType(fileName);
 
-                // Return file with inline content disposition to open in browser
-                return PhysicalFile(filePath, contentType, fileName, true);
+                // Set inline disposition based on view parameter or file type
+                var useInlineDisposition = view;
+
+                // Special handling for Excel files
+                if (fileName.EndsWith(".xlsx") || fileName.EndsWith(".xls"))
+                {
+                    var fileBytes = await System.IO.File.ReadAllBytesAsync(filePath);
+                    return File(fileBytes,
+                        "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet",
+                        fileName,
+                        useInlineDisposition);
+                }
+
+                // For PDF, HTML, TXT, and image files, use inline disposition when view=true
+                if (useInlineDisposition && (fileName.EndsWith(".pdf") || fileName.EndsWith(".txt") ||
+                    fileName.EndsWith(".html") || fileName.EndsWith(".jpg") || fileName.EndsWith(".jpeg") ||
+                    fileName.EndsWith(".png") || fileName.EndsWith(".gif")))
+                {
+                    return PhysicalFile(filePath, contentType, fileName, true);
+                }
+
+                // For all other files or when view=false, use attachment disposition (download)
+                return PhysicalFile(filePath, contentType, fileName, useInlineDisposition);
             }
             catch (Exception ex)
             {
-                // Log the exception
                 _logger.LogError(ex, $"Error serving file: {fileName}");
-                return StatusCode(500, $"An error occurred while serving the file: {ex.Message}");
-            }
-        }
-
-        [HttpDelete("{fileId}")]
-        public async Task<IActionResult> DeleteFile(int fileId)
-        {
-            try
-            {
-                var file = await _context.Files.FindAsync(fileId);
-                if (file == null)
+                return StatusCode(500, new
                 {
-                    return NotFound($"File with ID {fileId} not found.");
-                }
-
-                // Remove file from database
-                _context.Files.Remove(file);
-                await _context.SaveChangesAsync();
-
-                // Optionally, delete the physical file
-                if (System.IO.File.Exists(file.FilePath))
-                {
-                    System.IO.File.Delete(file.FilePath);
-                }
-
-                return Ok(new
-                {
-                    message = "File deleted successfully",
-                    fileId = fileId
+                    message = "An error occurred while serving the file.",
+                    details = ex.Message
                 });
-            }
-            catch (Exception ex)
-            {
-                _logger.LogError(ex, $"Error deleting file with ID: {fileId}");
-                return StatusCode(500, "An error occurred while deleting the file.");
             }
         }
 
@@ -426,16 +420,16 @@ namespace Projects_Management_System_Naseej.Controllers
         }
 
         // Helper method to determine content type with inline disposition
+
         private IActionResult ServeFileWithInlineDisposition(string filePath, string contentType, string fileName)
         {
             // Create file stream
             var fileStream = System.IO.File.OpenRead(filePath);
-
             // Return file with inline content disposition
-            return File(fileStream, contentType, fileName, true);
+            return File(fileStream, contentType, fileName, enableRangeProcessing: true);
         }
 
-        // Updated GetContentType method to handle inline disposition
+        // Updated GetContentType method to handle file extensions
         private string GetContentType(string fileName)
         {
             var ext = Path.GetExtension(fileName).ToLowerInvariant();
@@ -450,6 +444,8 @@ namespace Projects_Management_System_Naseej.Controllers
                 ".jpg" or ".jpeg" => "image/jpeg",
                 ".png" => "image/png",
                 ".gif" => "image/gif",
+                ".csv" => "text/csv",
+                ".ppt" or ".pptx" => "application/vnd.ms-powerpoint",
                 _ => "application/octet-stream"
             };
         }

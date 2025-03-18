@@ -19,6 +19,7 @@ namespace Projects_Management_System_Naseej.Implementations
         private readonly IHttpContextAccessor _httpContextAccessor;
         private readonly IConfiguration _configuration;
         private readonly IWebHostEnvironment _environment;
+        private readonly ILogger _logger;
 
         public FileRepository(MyDbContext context, IEnumerable<IFileTypeHandler> fileTypeHandlers, IHttpContextAccessor httpContextAccessor, IConfiguration configuration, IWebHostEnvironment environment
     )
@@ -178,7 +179,7 @@ namespace Projects_Management_System_Naseej.Implementations
                 Directory.CreateDirectory(uploadsPath);
 
                 // Handle file update
-                if (file != null)
+                if (file != null && file.Length > 0)
                 {
                     // Generate unique filename
                     var uniqueFileName = $"{Guid.NewGuid()}_{file.FileName}";
@@ -209,12 +210,24 @@ namespace Projects_Management_System_Naseej.Implementations
                 else
                 {
                     // Update only file name if no new file is provided
-                    existingFile.FileName = updateFileDTO.FileName ?? existingFile.FileName;
+                    if (!string.IsNullOrEmpty(updateFileDTO.FileName))
+                    {
+                        existingFile.FileName = updateFileDTO.FileName;
+                    }
                 }
 
                 // Update other properties
-                existingFile.CategoryId = updateFileDTO.CategoryId ?? existingFile.CategoryId;
-                existingFile.IsPublic = updateFileDTO.IsPublic ?? existingFile.IsPublic;
+                // Only update if the value is provided
+                if (updateFileDTO.CategoryId.HasValue)
+                {
+                    existingFile.CategoryId = updateFileDTO.CategoryId.Value;
+                }
+
+                if (updateFileDTO.IsPublic.HasValue)
+                {
+                    existingFile.IsPublic = updateFileDTO.IsPublic.Value;
+                }
+
                 existingFile.LastModifiedBy = updatedBy;
                 existingFile.LastModifiedDate = DateTime.UtcNow;
 
@@ -243,6 +256,7 @@ namespace Projects_Management_System_Naseej.Implementations
                 throw new Exception($"An error occurred while updating the file: {ex.Message}", ex);
             }
         }
+
 
 
         public async Task DeleteFileAsync(int fileId)

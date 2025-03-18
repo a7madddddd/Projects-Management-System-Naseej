@@ -620,20 +620,21 @@ const FileActions = {
     async fetchCategories() {
         try {
             const categories = await apiCall('https://localhost:44320/api/FileCategories');
+
+            // Populate category select in update modal
             const categorySelect = document.getElementById('categorySelect');
+            if (categorySelect) {
+                categorySelect.innerHTML = '<option value="">Select Category</option>';
 
-            // Clear existing options
-            categorySelect.innerHTML = '<option value="">Select Category</option>';
+                categories.forEach(category => {
+                    const option = document.createElement('option');
+                    option.value = category.categoryId;
+                    option.textContent = category.categoryName;
+                    categorySelect.appendChild(option);
+                });
+            }
 
-            // Populate categories
-            categories.forEach(category => {
-                const option = document.createElement('option');
-                option.value = category.categoryId;
-                option.textContent = category.categoryName;
-                categorySelect.appendChild(option);
-            });
-
-            return categories; // Return categories for further use
+            return categories;
         } catch (error) {
             console.error('Error fetching categories:', error);
             Swal.fire({
@@ -641,7 +642,7 @@ const FileActions = {
                 title: 'Categories Load Failed',
                 text: 'Unable to load file categories.'
             });
-            return []; // Return empty array in case of error
+            return [];
         }
     },
     async convertFile(fileId, targetExtension) {
@@ -773,20 +774,12 @@ const FileActions = {
             // Construct the file URL 
             const fullFileName = fileDetails.fileName + fileDetails.fileExtension;
 
-            // Different approach based on file type
-            const ext = fileExtension.toLowerCase();
-            let fileUrl;
+            // Use the specific 'view' endpoint instead of 'serve' with query parameter
+            const fileUrl = `https://localhost:44320/api/Files/view/${fullFileName}`;
 
-            if (['.pdf', '.jpg', '.jpeg', '.png', '.gif'].includes(ext)) {
-                // For viewable files, use view endpoint
-                fileUrl = `https://localhost:44320/api/Files/view/${fullFileName}`;
-            } else {
-                // For other files, use serve endpoint
-                fileUrl = `https://localhost:44320/api/Files/serve/${fullFileName}`;
-            }
-
-            // Open file in new tab
+            // Open file directly in browser
             window.open(fileUrl, '_blank');
+
         } catch (error) {
             console.error('Open file error:', error);
             Swal.fire({
@@ -797,6 +790,9 @@ const FileActions = {
             });
         }
     },
+
+
+
 
     allowedExtensions: ['.pdf', '.xlsx', '.xls', '.docx', '.txt'],
     maxFileSize: 10 * 1024 * 1024, // 10 MB
@@ -962,6 +958,87 @@ const FileActions = {
         return true;
     },
 
+    async updateFile() {
+        try {
+            // Get the file ID from the button's data attribute
+            const fileId = document.getElementById('updateFileBtn').dataset.fileId;
+
+            // Get form and validate
+            const form = document.getElementById('updateFileForm');
+            if (!form.checkValidity()) {
+                form.classList.add('was-validated');
+                return;
+            }
+
+            // Create FormData
+            const formData = new FormData();
+
+            // Add file if selected
+            const fileInput = document.getElementById('fileInput');
+            if (fileInput.files.length > 0) {
+                formData.append('File', fileInput.files[0]);
+            }
+
+            // Add other form fields
+            formData.append('FileName', document.getElementById('fileName').value);
+            formData.append('CategoryId', document.getElementById('categorySelect').value);
+            formData.append('IsPublic', document.getElementById('isPublic').checked);
+
+            // Show loading
+            Swal.fire({
+                title: 'Updating File...',
+                html: 'Please wait while the file is being updated',
+                allowOutsideClick: false,
+                didOpen: () => {
+                    Swal.showLoading();
+                }
+            });
+
+            // Perform file update
+            const response = await fetch(`https://localhost:44320/api/Files/${fileId}`, {
+                method: 'PUT',
+                headers: {
+                    'Authorization': `Bearer ${sessionStorage.getItem('authToken')}`
+                },
+                body: formData
+            });
+
+            // Check response
+            if (!response.ok) {
+                const errorText = await response.text();
+                throw new Error(errorText || 'File update failed');
+            }
+
+            // Parse response
+            const responseData = await response.json();
+
+            // Success notification
+            Swal.fire({
+                icon: 'success',
+                title: 'File Updated',
+                text: 'File has been successfully updated.'
+            });
+
+            // Close the modal
+            const updateModal = bootstrap.Modal.getInstance(document.getElementById('updateFileModal'));
+            if (updateModal) {
+                updateModal.hide();
+            }
+
+            // Refresh files table
+            await this.renderFilesTable();
+
+            return responseData;
+
+        } catch (error) {
+            console.error('Update file error:', error);
+            Swal.fire({
+                icon: 'error',
+                title: 'Update Failed',
+                text: error.message || 'Unable to update file.'
+            });
+        }
+    },
 
     async editFile(fileId) {
         // Check edit permission
@@ -974,32 +1051,121 @@ const FileActions = {
             return;
         }
 
-        Swal.fire({
-            title: 'Edit File',
-            input: 'text',
-            inputLabel: 'New File Name',
-            inputPlaceholder: 'Enter new file name',
-            showCancelButton: true,
-            confirmButtonText: 'Update',
-            preConfirm: async (newFileName) => {
-                try {
-                    await apiCall(`https://localhost:44320/api/Files/${fileId}`, 'PUT', {
-                        fileName: newFileName
-                    });
+        try {
+            // Fetch file details
+            const fileDetails = await apiCall(`https://localhost:44320/api/Files/${fileId}`);
 
-                    Swal.fire({
-                        icon: 'success',
-                        title: 'File Updated',
-                        text: 'File name has been updated successfully!'
-                    });
+            // Make sure categories are loaded
+            await this.loadCategories();
 
-                    // Refresh files list
-                    await this.renderFilesTable();
-                } catch (error) {
-                    Swal.showValidationMessage(`Request failed: ${error.message}`);
-                }
+            // Populate modal with file details
+            this.populateUpdateModal(fileDetails);
+
+            // Show the modal
+            const updateModal = new bootstrap.Modal(document.getElementById('updateFileModal'));
+            updateModal.show();
+
+        } catch (error) {
+            console.error('Edit file error:', error);
+            Swal.fire({
+                icon: 'error',
+                title: 'Error',
+                text: 'Unable to retrieve file details for editing.'
+            });
+        }
+    },
+    async loadCategories() {
+        try {
+            // Use the correct endpoint for categories
+            const categories = await apiCall('https://localhost:44320/api/FileCategories');
+            sessionStorage.setItem('categories', JSON.stringify(categories));
+            return categories;
+        } catch (error) {
+            console.error('Failed to load categories:', error);
+            Swal.fire({
+                icon: 'warning',
+                title: 'Warning',
+                text: 'Failed to load categories. Some options may not be available.'
+            });
+            return [];
+        }
+    },
+
+    
+
+
+    async editFile(fileId) {
+        // Check edit permission
+        if (!window.roleManager.canPerformAction('edit_file')) {
+            Swal.fire({
+                icon: 'error',
+                title: 'Permission Denied',
+                text: 'You do not have permission to edit files.'
+            });
+            return;
+        }
+
+        try {
+            // Fetch file details
+            const fileDetails = await apiCall(`https://localhost:44320/api/Files/${fileId}`);
+
+            // Populate modal with file details
+            this.populateUpdateModal(fileDetails);
+
+            // Show the modal
+            const updateModal = new bootstrap.Modal(document.getElementById('updateFileModal'));
+            updateModal.show();
+
+        } catch (error) {
+            console.error('Edit file error:', error);
+            Swal.fire({
+                icon: 'error',
+                title: 'Error',
+                text: 'Unable to retrieve file details for editing.'
+            });
+        }
+    },
+
+    populateUpdateModal(fileDetails) {
+        // Get stored categories from session storage
+        const storedCategories = JSON.parse(sessionStorage.getItem('categories') || '[]');
+
+        // Populate file name
+        document.getElementById('fileName').value = fileDetails.fileName;
+
+        // Populate category select
+        const categorySelect = document.getElementById('categorySelect');
+        categorySelect.innerHTML = ''; // Clear existing options
+
+        // Add default option
+        const defaultOption = document.createElement('option');
+        defaultOption.value = '';
+        defaultOption.textContent = 'Select Category';
+        categorySelect.appendChild(defaultOption);
+
+        // Log the categories to help debug
+        console.log('Populating categories:', storedCategories);
+
+        // Populate categories
+        storedCategories.forEach(category => {
+            const option = document.createElement('option');
+            option.value = category.categoryId;
+            option.textContent = category.categoryName;
+
+            // Set selected if matches file's category
+            if (category.categoryId === fileDetails.categoryId) {
+                option.selected = true;
             }
+
+            categorySelect.appendChild(option);
         });
+
+        // Set public checkbox
+        document.getElementById('isPublic').checked = fileDetails.isPublic;
+
+        // Store current file ID for update
+        const updateFileBtn = document.getElementById('updateFileBtn');
+        updateFileBtn.dataset.fileId = fileDetails.fileId;
     },
 
     async deleteFile(fileId) {
@@ -1115,8 +1281,15 @@ async function initializePage() {
         // Log roles for debugging
         console.log('Initialized User Roles:', userRoles);
 
-        // Fetch categories
-        await FileActions.fetchCategories();
+        // Fetch categories and store in session storage
+        const categories = await FileActions.fetchCategories();
+
+        // Ensure categories are stored
+        if (categories && categories.length > 0) {
+            sessionStorage.setItem('categories', JSON.stringify(categories));
+        } else {
+            console.warn('No categories fetched');
+        }
 
         // Fetch and render files
         await FileActions.renderFilesTable();
@@ -1132,37 +1305,44 @@ async function initializePage() {
     }
 }
 
+
 // Initialization with improved error handling
 // Initialization and setup
-document.addEventListener('DOMContentLoaded', initializePage, () => {
-    const fileInput = document.getElementById('fileInput');
-    const fileNameInput = document.getElementById('fileName');
+document.addEventListener('DOMContentLoaded', async () => {
+    // Initialize categories on page load
+    await FileActions.loadCategories();
 
-    if (fileInput && fileNameInput) {
-        fileInput.addEventListener('change', (e) => {
-            const file = e.target.files[0];
-            if (file) {
-                try {
-                    // Validate file
-                    FileActions.validateFile(file);
+    const updateModal = document.getElementById('updateFileModal');
+    if (updateModal) {
+        // Prevent aria-hidden issues
+        updateModal.addEventListener('show.bs.modal', (event) => {
+            // Remove aria-hidden when modal is shown
+            updateModal.removeAttribute('aria-hidden');
+            // Ensure proper focus management
+            const modalCloseBtn = updateModal.querySelector('.btn-close');
+            if (modalCloseBtn) {
+                modalCloseBtn.focus();
+            }
+        });
 
-                    // Set file name
-                    fileNameInput.value = file.name;
-                } catch (error) {
-                    // Reset file input and show error
-                    fileInput.value = ''; // Clear file input
-                    fileNameInput.value = ''; // Clear file name
+        const updateFileBtn = document.getElementById('updateFileBtn');
+        if (updateFileBtn) {
+            updateFileBtn.addEventListener('click', () => {
+                FileActions.updateFile();
+            });
+        }
 
-                    Swal.fire({
-                        icon: 'error',
-                        title: 'File Validation Error',
-                        text: error.message
-                    });
-                }
+        updateModal.addEventListener('hidden.bs.modal', (event) => {
+            // Restore aria-hidden when modal is closed
+            updateModal.setAttribute('aria-hidden', 'true');
+            // Reset form
+            const form = updateModal.querySelector('form');
+            if (form) {
+                form.reset();
+                form.classList.remove('was-validated');
             }
         });
     }
-    
 });
 function resetFiltersAndSearch() {
     // Reset checkboxes
