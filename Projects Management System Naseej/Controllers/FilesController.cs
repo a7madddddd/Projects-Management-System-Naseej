@@ -13,7 +13,6 @@ namespace Projects_Management_System_Naseej.Controllers
 {
     [Route("api/[controller]")]
     [ApiController]
-    [AutoValidateAntiforgeryToken]
     public class FilesController : ControllerBase
     {
         private readonly IFileRepository _fileRepository;
@@ -124,7 +123,6 @@ namespace Projects_Management_System_Naseej.Controllers
 
 
         [HttpPut("{fileId}")]
-        [Authorize(Policy = "Editor")]
         public async Task<ActionResult<FileDTO>> UpdateFile(int fileId, IFormFile file, [FromForm] UpdateFileDTO updateFileDTO)
         {
             try
@@ -161,7 +159,6 @@ namespace Projects_Management_System_Naseej.Controllers
 
 
         [HttpDelete("{fileId}")]
-        [Authorize(Policy = "Admin")]
         public async Task<IActionResult> DeleteFile(int fileId)
         {
             try
@@ -222,7 +219,6 @@ namespace Projects_Management_System_Naseej.Controllers
         }
 
         [HttpGet("{fileId}/download")]
-        [Authorize(Policy = "Viewer")]
         public async Task<IActionResult> DownloadFile(int fileId)
         {
             try

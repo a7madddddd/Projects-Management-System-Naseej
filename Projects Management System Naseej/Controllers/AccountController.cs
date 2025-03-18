@@ -76,7 +76,6 @@ namespace Projects_Management_System_Naseej.Controllers
         }
 
         [HttpPost("{userId}/roles/{roleId}")]
-        [Authorize(Policy = "SuperAdmin")]
         public async Task<IActionResult> AssignRoleToUser(int userId, int roleId)
         {
             try

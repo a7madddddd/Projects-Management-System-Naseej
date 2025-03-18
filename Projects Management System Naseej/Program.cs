@@ -12,6 +12,20 @@ using System.Text;
 
 var builder = WebApplication.CreateBuilder(args);
 
+
+
+// CORS Configuration (Allow All Origins)
+builder.Services.AddCors(options =>
+{
+    options.AddPolicy("AllowAll",
+        policy =>
+        {
+            policy.AllowAnyOrigin()
+                  .AllowAnyHeader()
+                  .AllowAnyMethod();
+        });
+});
+
 builder.Services.AddDbContext<MyDbContext>(options =>
     options.UseSqlServer(builder.Configuration.GetConnectionString("YourConnectionString")));
 
@@ -75,6 +89,8 @@ if (app.Environment.IsDevelopment())
 
 app.UseHttpsRedirection();
 //app.UseMiddleware<CustomAuthenticationMiddleware>();
+app.UseCors("AllowAll");
+
 app.UseAuthentication();
 app.UseAuthorization();
 

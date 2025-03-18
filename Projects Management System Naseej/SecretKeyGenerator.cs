@@ -6,7 +6,7 @@ namespace Projects_Management_System_Naseej
 {
     public class SecretKeyGenerator
     {
-        public static string GenerateSecretKey(int keySize = 32) // 32 bytes = 256 bits
+        public static string GenerateSecretKey(int keySize = 32)
         {
             using (var rng = RandomNumberGenerator.Create())
             {
