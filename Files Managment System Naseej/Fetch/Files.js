@@ -632,6 +632,8 @@ const FileActions = {
                 option.textContent = category.categoryName;
                 categorySelect.appendChild(option);
             });
+
+            return categories; // Return categories for further use
         } catch (error) {
             console.error('Error fetching categories:', error);
             Swal.fire({
@@ -639,40 +641,166 @@ const FileActions = {
                 title: 'Categories Load Failed',
                 text: 'Unable to load file categories.'
             });
+            return []; // Return empty array in case of error
+        }
+    },
+    async convertFile(fileId, targetExtension) {
+        try {
+            // Check permission
+            if (!window.roleManager.canPerformAction('edit_file')) {
+                Swal.fire({
+                    icon: 'error',
+                    title: 'Permission Denied',
+                    text: 'You do not have permission to convert files.'
+                });
+                return;
+            }
+
+            // Show loading
+            Swal.fire({
+                title: 'Converting File...',
+                html: 'Please wait while the file is being converted',
+                allowOutsideClick: false,
+                didOpen: () => {
+                    Swal.showLoading();
+                }
+            });
+
+            // Perform conversion
+            const response = await fetch(`https://localhost:44320/api/Files/${fileId}/convert`, {
+                method: 'POST',
+                headers: {
+                    'Content-Type': 'application/json',
+                    'Authorization': `Bearer ${sessionStorage.getItem('authToken')}`
+                },
+                body: JSON.stringify(targetExtension)
+            });
+
+            // Handle response
+            if (!response.ok) {
+                const errorText = await response.text();
+                throw new Error(errorText || 'File conversion failed');
+            }
+
+            const convertedFile = await response.json();
+
+            // Success notification
+            Swal.fire({
+                icon: 'success',
+                title: 'File Converted',
+                text: `File converted to ${convertedFile.targetExtension}`,
+                footer: `New filename: ${convertedFile.convertedFileName}`
+            });
+
+            // Refresh files table
+            await this.renderFilesTable();
+
+        } catch (error) {
+            console.error('File conversion error:', error);
+            Swal.fire({
+                icon: 'error',
+                title: 'Conversion Failed',
+                text: error.message || 'Unable to convert file.'
+            });
         }
     },
     // Existing file action methods
     async viewFileDetails(fileId) {
-        // Check permission before proceeding
-        if (!window.roleManager.canPerformAction('view_file')) {
-            Swal.fire({
-                icon: 'error',
-                title: 'Permission Denied',
-                text: 'You do not have permission to view file details.',
-                footer: `Your current roles: ${window.roleManager.currentUserRoles.join(', ')}`
-            });
-            return;
-        }
-
         try {
+            // Fetch file details
             const fileDetails = await apiCall(`https://localhost:44320/api/Files/${fileId}`);
 
+            // Fetch categories to get category name
+            const categories = await this.fetchCategories();
+
+            // Find category name
+            const category = categories.find(cat => cat.categoryId === fileDetails.categoryId);
+            const categoryName = category ? category.categoryName : 'Uncategorized';
+
+            // Create a modal with comprehensive file information and preview options
             Swal.fire({
                 title: 'File Details',
                 html: `
                     <div class="text-start">
-                        <p><strong>File Name:</strong> ${fileDetails.fileName}</p>
-                        <p><strong>Extension:</strong> ${fileDetails.fileExtension}</p>
+                        <p><strong>File Name:</strong> ${fileDetails.fileName}${fileDetails.fileExtension}</p>
                         <p><strong>Uploaded By:</strong> ${fileDetails.uploadedBy}</p>
                         <p><strong>Upload Date:</strong> ${new Date(fileDetails.uploadDate).toLocaleString()}</p>
+                        <p><strong>File Size:</strong> ${this.formatFileSize(fileDetails.fileSize)}</p>
+                        <p><strong>Category:</strong> ${categoryName}</p>
+                        <p><strong>Public:</strong> ${fileDetails.isPublic ? 'Yes' : 'No'}</p>
                     </div>
                 `,
-                icon: 'info'
+                showCloseButton: true,
+                showCancelButton: true,
+                confirmButtonText: 'Open File',
+                cancelButtonText: 'Download',
+                preConfirm: () => {
+                    // Open file in browser
+                    this.openFileInBrowser(fileId, fileDetails.fileName, fileDetails.fileExtension);
+                    return false; // Prevent modal closing
+                }
+            }).then((result) => {
+                // Handle download if cancel button is clicked
+                if (result.dismiss === Swal.DismissReason.cancel) {
+                    this.downloadFile(fileId, fileDetails.fileName, fileDetails.fileExtension);
+                }
             });
+
         } catch (error) {
             console.error('View file details error:', error);
+            Swal.fire({
+                icon: 'error',
+                title: 'Error',
+                text: 'Unable to retrieve file details.'
+            });
         }
     },
+
+    formatFileSize(bytes) {
+        if (bytes === 0) return '0 Bytes';
+        const k = 1024;
+        const sizes = ['Bytes', 'KB', 'MB', 'GB', 'TB'];
+        const i = Math.floor(Math.log(bytes) / Math.log(k));
+        return parseFloat((bytes / Math.pow(k, i)).toFixed(2)) + ' ' + sizes[i];
+    },
+
+    // Method to open file in browser
+    async openFileInBrowser(fileId, fileName, fileExtension) {
+        try {
+            // Fetch file details to get the full file path
+            const fileDetails = await apiCall(`https://localhost:44320/api/Files/${fileId}`);
+
+            // Construct the file URL 
+            const fullFileName = fileDetails.fileName + fileDetails.fileExtension;
+
+            // Different approach based on file type
+            const ext = fileExtension.toLowerCase();
+            let fileUrl;
+
+            if (['.pdf', '.jpg', '.jpeg', '.png', '.gif'].includes(ext)) {
+                // For viewable files, use view endpoint
+                fileUrl = `https://localhost:44320/api/Files/view/${fullFileName}`;
+            } else {
+                // For other files, use serve endpoint
+                fileUrl = `https://localhost:44320/api/Files/serve/${fullFileName}`;
+            }
+
+            // Open file in new tab
+            window.open(fileUrl, '_blank');
+        } catch (error) {
+            console.error('Open file error:', error);
+            Swal.fire({
+                icon: 'error',
+                title: 'Open File Failed',
+                text: 'Unable to open file in browser.',
+                footer: `Error: ${error.message}`
+            });
+        }
+    },
+
+    allowedExtensions: ['.pdf', '.xlsx', '.xls', '.docx', '.txt'],
+    maxFileSize: 10 * 1024 * 1024, // 10 MB
+
     async uploadFile() {
         // Check upload permission
         if (!window.roleManager.canPerformAction('upload_file')) {
@@ -707,9 +835,24 @@ const FileActions = {
             return;
         }
 
+        // Get the selected file
+        const file = fileInput.files[0];
+
+        // Client-side file validation
+        try {
+            this.validateFile(file);
+        } catch (error) {
+            Swal.fire({
+                icon: 'error',
+                title: 'Validation Error',
+                text: error.message
+            });
+            return;
+        }
+
         // Create FormData
         const formData = new FormData();
-        formData.append('file', fileInput.files[0]);
+        formData.append('file', file);
         formData.append('FileName', fileName);
         formData.append('CategoryId', categorySelect.value);
         formData.append('IsPublic', isPublic);
@@ -729,7 +872,7 @@ const FileActions = {
                 }
             });
 
-            // Perform file upload with detailed error handling
+            // Perform file upload
             const token = sessionStorage.getItem('authToken');
             const response = await fetch('https://localhost:44320/api/Files', {
                 method: 'POST',
@@ -743,7 +886,7 @@ const FileActions = {
             if (!response.ok) {
                 let errorDetails = 'Unknown error occurred';
                 try {
-                    const errorData = await response.text(); // Use text() instead of json()
+                    const errorData = await response.text();
                     console.error('Error response:', errorData);
 
                     // Try to parse as JSON if possible
@@ -801,6 +944,22 @@ const FileActions = {
 
             throw error;
         }
+    },
+
+    // Client-side file validation method
+    validateFile(file) {
+        // Check file size
+        if (file.size > this.maxFileSize) {
+            throw new Error('File size exceeds the maximum allowed size of 10 MB.');
+        }
+
+        // Check file extension
+        const fileExtension = '.' + file.name.split('.').pop().toLowerCase();
+        if (!this.allowedExtensions.includes(fileExtension)) {
+            throw new Error('Invalid file type. Allowed types are: PDF, Excel, Word, and Text.');
+        }
+
+        return true;
     },
 
 
@@ -883,43 +1042,69 @@ const FileActions = {
     },
 
     async downloadFile(fileId, fileName, fileExtension) {
-        // Check download permission
-        if (!window.roleManager.canPerformAction('download_file')) {
-            Swal.fire({
-                icon: 'error',
-                title: 'Permission Denied',
-                text: 'You do not have permission to download files.'
-            });
-            return;
-        }
-
         try {
-            const blob = await apiCall(`https://localhost:44320/api/Files/download/${fileId}`, 'GET', null, {
-                'Accept': 'application/octet-stream'
+            // Show loading indicator
+            Swal.fire({
+                title: 'Preparing Download...',
+                html: 'Please wait while the file is being prepared',
+                allowOutsideClick: false,
+                didOpen: () => {
+                    Swal.showLoading();
+                }
             });
 
-            const downloadLink = document.createElement('a');
-            downloadLink.href = window.URL.createObjectURL(new Blob([blob]));
-            downloadLink.download = `${fileName}${fileExtension}`;
+            // Fetch file download
+            const response = await fetch(`https://localhost:44320/api/Files/download/${fileId}`, {
+                method: 'GET',
+                headers: {
+                    'Authorization': `Bearer ${sessionStorage.getItem('authToken')}`,
+                    'Accept': 'application/octet-stream'
+                }
+            });
 
+            // Check response
+            if (!response.ok) {
+                const errorText = await response.text();
+                throw new Error(errorText || 'File download failed');
+            }
+
+            // Get blob
+            const blob = await response.blob();
+
+            // Fetch file details to get correct filename
+            const fileDetails = await apiCall(`https://localhost:44320/api/Files/${fileId}`);
+            const fullFileName = fileDetails.fileName + fileDetails.fileExtension;
+
+            // Create download link
+            const downloadLink = document.createElement('a');
+            downloadLink.href = window.URL.createObjectURL(blob);
+            downloadLink.download = fullFileName;
+
+            // Append to body, click, and remove
             document.body.appendChild(downloadLink);
             downloadLink.click();
             document.body.removeChild(downloadLink);
 
+            // Success notification
             Swal.fire({
                 icon: 'success',
                 title: 'Download Started',
-                text: `Downloading ${fileName}${fileExtension}`
+                text: `Downloading ${fullFileName}`
             });
+
         } catch (error) {
             console.error('Download error:', error);
-        }
-    }
+            Swal.fire({
+                icon: 'error',
+                title: 'Download Failed',
+                text: 'Unable to download file.',
+                footer: `Error: ${error.message}`
+            });
+        }}
 };
 
-// Initialization with improved error handling
-// Initialization and setup
-document.addEventListener('DOMContentLoaded', async () => {
+
+async function initializePage() {
     try {
         // Create global role manager
         window.roleManager = new RoleAccessManager();
@@ -930,26 +1115,11 @@ document.addEventListener('DOMContentLoaded', async () => {
         // Log roles for debugging
         console.log('Initialized User Roles:', userRoles);
 
-        // Fetch and render files
-        await FileActions.renderFilesTable();
-
         // Fetch categories
         await FileActions.fetchCategories();
 
-        // Setup file input listener
-        const fileInput = document.getElementById('fileInput');
-        const fileNameInput = document.getElementById('fileName');
-
-        if (fileInput && fileNameInput) {
-            fileInput.addEventListener('change', (e) => {
-                const file = e.target.files[0];
-                if (file) {
-                    fileNameInput.value = file.name;
-                }
-            });
-        }
-
-
+        // Fetch and render files
+        await FileActions.renderFilesTable();
 
     } catch (error) {
         console.error('Initialization error:', error);
@@ -960,8 +1130,40 @@ document.addEventListener('DOMContentLoaded', async () => {
             footer: `Error: ${error.message}`
         });
     }
-});
+}
 
+// Initialization with improved error handling
+// Initialization and setup
+document.addEventListener('DOMContentLoaded', initializePage, () => {
+    const fileInput = document.getElementById('fileInput');
+    const fileNameInput = document.getElementById('fileName');
+
+    if (fileInput && fileNameInput) {
+        fileInput.addEventListener('change', (e) => {
+            const file = e.target.files[0];
+            if (file) {
+                try {
+                    // Validate file
+                    FileActions.validateFile(file);
+
+                    // Set file name
+                    fileNameInput.value = file.name;
+                } catch (error) {
+                    // Reset file input and show error
+                    fileInput.value = ''; // Clear file input
+                    fileNameInput.value = ''; // Clear file name
+
+                    Swal.fire({
+                        icon: 'error',
+                        title: 'File Validation Error',
+                        text: error.message
+                    });
+                }
+            }
+        });
+    }
+    
+});
 function resetFiltersAndSearch() {
     // Reset checkboxes
     const filterAll = document.getElementById('filter-all');
@@ -983,3 +1185,8 @@ function resetFiltersAndSearch() {
 }
 
 // Initialization
+
+
+
+
+

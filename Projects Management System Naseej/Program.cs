@@ -26,6 +26,9 @@ builder.Services.AddCors(options =>
         });
 });
 
+builder.Services.AddLogging();
+
+
 builder.Services.AddDbContext<MyDbContext>(options =>
     options.UseSqlServer(builder.Configuration.GetConnectionString("YourConnectionString")));
 

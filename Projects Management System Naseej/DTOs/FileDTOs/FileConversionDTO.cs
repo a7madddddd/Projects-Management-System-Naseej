@@ -6,5 +6,7 @@
         public string OriginalExtension { get; set; }
         public string TargetExtension { get; set; }
         public string ConvertedFilePath { get; set; }
+        public string FileName { get; set; } = null!;
+
     }
 }

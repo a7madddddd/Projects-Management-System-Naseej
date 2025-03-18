@@ -5,8 +5,9 @@ using Projects_Management_System_Naseej.DTOs.UserDTOs;
 using Projects_Management_System_Naseej.Models;
 using Projects_Management_System_Naseej.Repositories;
 using File = Projects_Management_System_Naseej.Models.File;
-using System.IO; 
-
+using System.IO;
+using Microsoft.AspNetCore.Hosting;
+using Microsoft.Extensions.Hosting;
 using System.Threading.Tasks;
 
 namespace Projects_Management_System_Naseej.Implementations
@@ -17,13 +18,17 @@ namespace Projects_Management_System_Naseej.Implementations
         private readonly IEnumerable<IFileTypeHandler> _fileTypeHandlers;
         private readonly IHttpContextAccessor _httpContextAccessor;
         private readonly IConfiguration _configuration;
+        private readonly IWebHostEnvironment _environment;
 
-        public FileRepository(MyDbContext context, IEnumerable<IFileTypeHandler> fileTypeHandlers, IHttpContextAccessor httpContextAccessor, IConfiguration configuration)
+        public FileRepository(MyDbContext context, IEnumerable<IFileTypeHandler> fileTypeHandlers, IHttpContextAccessor httpContextAccessor, IConfiguration configuration, IWebHostEnvironment environment
+    )
         {
             _context = context;
             _fileTypeHandlers = fileTypeHandlers;
             _httpContextAccessor = httpContextAccessor;
             _configuration = configuration;
+            _environment = environment;
+
         }
 
         private async Task ValidateFile(IFormFile file)
@@ -96,34 +101,48 @@ namespace Projects_Management_System_Naseej.Implementations
         {
             try
             {
+                // Validate file
+                ValidateFile(file);
+
+                // Get upload directory from configuration
                 var uploadDirectory = _configuration["UploadSettings:UploadDirectory"];
-                var uploadsPath = Path.Combine(Directory.GetCurrentDirectory(), uploadDirectory);
+                var uploadsPath = Path.Combine(_environment.WebRootPath, uploadDirectory);
+
+                // Ensure directory exists
                 if (!Directory.Exists(uploadsPath))
                 {
                     Directory.CreateDirectory(uploadsPath);
                 }
 
-                var filePath = Path.Combine(uploadsPath, file.FileName);
+                // Generate unique filename to prevent overwriting
+                var uniqueFileName = $"{Guid.NewGuid()}_{file.FileName}";
+                var filePath = Path.Combine(uploadsPath, uniqueFileName);
+
+                // Save file
                 using (var stream = new FileStream(filePath, FileMode.Create))
                 {
                     await file.CopyToAsync(stream);
-                    await ValidateFile(file);
                 }
 
+                // Create file entity
                 var newFile = new File
                 {
-                    FileName = createFileDTO.FileName,
+                    FileName = createFileDTO.FileName, // Use provided file name
                     FileExtension = Path.GetExtension(file.FileName),
-                    FilePath = filePath,
+                    FilePath = filePath, // Full path to the saved file
                     FileSize = file.Length,
                     CategoryId = categoryId,
                     UploadedBy = uploadedBy,
-                    IsPublic = createFileDTO.IsPublic
+                    IsPublic = createFileDTO.IsPublic,
+                    UploadDate = DateTime.UtcNow,
+                    IsActive = true
                 };
 
+                // Save to database
                 _context.Files.Add(newFile);
                 await _context.SaveChangesAsync();
 
+                // Return DTO
                 return new FileDTO
                 {
                     FileId = newFile.FileId,
@@ -133,7 +152,7 @@ namespace Projects_Management_System_Naseej.Implementations
                     FileSize = newFile.FileSize,
                     CategoryId = newFile.CategoryId,
                     UploadedBy = newFile.UploadedBy,
-                    UploadDate = newFile.UploadDate ?? DateTime.MinValue,
+                    UploadDate = newFile.UploadDate.GetValueOrDefault(),
                     IsActive = newFile.IsActive ?? false,
                     IsPublic = newFile.IsPublic ?? false,
                 };
@@ -146,7 +165,6 @@ namespace Projects_Management_System_Naseej.Implementations
         }
 
 
-
         public async Task<FileDTO> UpdateFileAsync(int fileId, IFormFile file, int updatedBy, UpdateFileDTO updateFileDTO)
         {
             try
@@ -154,45 +172,56 @@ namespace Projects_Management_System_Naseej.Implementations
                 var existingFile = await _context.Files.FindAsync(fileId);
                 if (existingFile == null) return null;
 
+                // Prepare upload paths
+                var wwwrootPath = _environment.WebRootPath;
+                var uploadsPath = Path.Combine(wwwrootPath, "Files");
+                Directory.CreateDirectory(uploadsPath);
+
+                // Handle file update
                 if (file != null)
                 {
-                    var wwwrootPath = Path.Combine(Directory.GetCurrentDirectory(), "wwwroot");
-                    var uploadsPath = Path.Combine(wwwrootPath, "Files");
-                    if (!Directory.Exists(uploadsPath))
-                    {
-                        Directory.CreateDirectory(uploadsPath);
-                    }
+                    // Generate unique filename
+                    var uniqueFileName = $"{Guid.NewGuid()}_{file.FileName}";
+                    var filePath = Path.Combine(uploadsPath, uniqueFileName);
 
-                    // Delete the existing file if it exists
-                    if (System.IO.File.Exists(existingFile.FilePath))
+                    // Delete existing file if it exists
+                    if (!string.IsNullOrEmpty(existingFile.FilePath) &&
+                        System.IO.File.Exists(existingFile.FilePath))
                     {
                         System.IO.File.Delete(existingFile.FilePath);
                     }
 
-                    var filePath = Path.Combine(uploadsPath, file.FileName);
+                    // Save new file
                     using (var stream = new FileStream(filePath, FileMode.Create))
                     {
                         await file.CopyToAsync(stream);
-                        await ValidateFile(file);
                     }
 
-                    existingFile.FileName = updateFileDTO.FileName ?? existingFile.FileName;
+                    // Validate file
+                    await ValidateFile(file);
+
+                    // Update file properties
+                    existingFile.FileName = updateFileDTO.FileName ?? Path.GetFileNameWithoutExtension(file.FileName);
                     existingFile.FileExtension = Path.GetExtension(file.FileName);
                     existingFile.FilePath = filePath;
                     existingFile.FileSize = file.Length;
                 }
                 else
                 {
+                    // Update only file name if no new file is provided
                     existingFile.FileName = updateFileDTO.FileName ?? existingFile.FileName;
                 }
 
+                // Update other properties
                 existingFile.CategoryId = updateFileDTO.CategoryId ?? existingFile.CategoryId;
                 existingFile.IsPublic = updateFileDTO.IsPublic ?? existingFile.IsPublic;
                 existingFile.LastModifiedBy = updatedBy;
-                existingFile.LastModifiedDate = DateTime.Now;
+                existingFile.LastModifiedDate = DateTime.UtcNow;
 
+                // Save changes
                 await _context.SaveChangesAsync();
 
+                // Return updated file DTO
                 return new FileDTO
                 {
                     FileId = existingFile.FileId,
@@ -211,10 +240,10 @@ namespace Projects_Management_System_Naseej.Implementations
             }
             catch (Exception ex)
             {
-                
                 throw new Exception($"An error occurred while updating the file: {ex.Message}", ex);
             }
         }
+
 
         public async Task DeleteFileAsync(int fileId)
         {
@@ -358,44 +387,69 @@ namespace Projects_Management_System_Naseej.Implementations
 
         public async Task<FileConversionDTO> ConvertFileAsync(int fileId, string targetExtension)
         {
-            var file = await _context.Files.FindAsync(fileId);
-            if (file == null) throw new FileNotFoundException("File not found.");
-
-            using (var fileStream = System.IO.File.OpenRead(file.FilePath))
+            try
             {
-                var handler = _fileTypeHandlers.FirstOrDefault(h => h.CanHandleAsync(fileStream, file.FileName).Result);
+                // Find the file
+                var file = await _context.Files.FindAsync(fileId);
+                if (file == null)
+                    throw new FileNotFoundException("File not found.");
 
-                if (handler == null)
+                // Validate target extension
+                var allowedExtensions = new[] { ".pdf", ".xlsx", ".xls", ".docx", ".txt" };
+                if (!allowedExtensions.Contains(targetExtension.ToLower()))
+                    throw new ArgumentException("Invalid target extension.");
+
+                // Open file stream
+                using (var fileStream = System.IO.File.OpenRead(file.FilePath))
                 {
-                    throw new NotSupportedException("No handler found for the file type.");
+                    // Find appropriate handler
+                    var handler = _fileTypeHandlers.FirstOrDefault(h => h.CanHandleAsync(fileStream, file.FileName).Result);
+
+                    if (handler == null)
+                        throw new NotSupportedException("No handler found for the file type.");
+
+                    // Convert file
+                    var convertedBytes = await handler.ConvertToAsync(fileStream, targetExtension);
+
+                    // Prepare converted file path
+                    var convertedFilesPath = Path.Combine(_environment.WebRootPath, "ConvertedFiles");
+                    Directory.CreateDirectory(convertedFilesPath);
+
+                    // Generate unique filename
+                    var convertedFileName = $"{Guid.NewGuid()}{targetExtension}";
+                    var convertedFilePath = Path.Combine(convertedFilesPath, convertedFileName);
+
+                    // Save converted file
+                    await System.IO.File.WriteAllBytesAsync(convertedFilePath, convertedBytes);
+
+                    // Create audit log
+                    var auditLog = new AuditLog
+                    {
+                        UserId = file.UploadedBy,
+                        ActionType = "Convert",
+                        FileId = fileId,
+                        ActionDate = DateTime.UtcNow,
+                        Details = $"Converted from {file.FileExtension} to {targetExtension}"
+                    };
+                    _context.AuditLogs.Add(auditLog);
+                    await _context.SaveChangesAsync();
+
+                    // Return conversion details
+                    return new FileConversionDTO
+                    {
+                        FileId = fileId,
+                        OriginalExtension = file.FileExtension,
+                        TargetExtension = targetExtension,
+                        ConvertedFilePath = convertedFilePath,
+                        FileName = convertedFileName
+                    };
                 }
-
-                var convertedBytes = await handler.ConvertToAsync(fileStream, targetExtension);
-                var convertedFilePath = Path.Combine("ConvertedFiles", $"{Guid.NewGuid()}.{targetExtension}");
-                await System.IO.File.WriteAllBytesAsync(convertedFilePath, convertedBytes);
-
-                var auditLog = new AuditLog
-                {
-                    UserId = file.UploadedBy,
-                    ActionType = "Convert",
-                    FileId = fileId,
-                    ActionDate = DateTime.Now,
-                    Ipaddress = GetClientIpAddress(),
-                    Details = $"Converted from {file.FileExtension} to {targetExtension}"
-                };
-                _context.AuditLogs.Add(auditLog);
-                await _context.SaveChangesAsync();
-
-                return new FileConversionDTO
-                {
-                    FileId = fileId,
-                    OriginalExtension = file.FileExtension,
-                    TargetExtension = targetExtension,
-                    ConvertedFilePath = convertedFilePath
-                };
+            }
+            catch (Exception ex)
+            {
+                throw;
             }
         }
-
 
         public async Task<PaginatedResult<FileDTO>> GetFilesAsync(int pageNumber = 1, int pageSize = 10)
         {
