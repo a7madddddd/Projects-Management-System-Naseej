@@ -13,6 +13,8 @@ using Microsoft.EntityFrameworkCore;
 using Microsoft.IdentityModel.Tokens;
 using System.IdentityModel.Tokens.Jwt;
 using System.Text;
+using System.Net.Mime;
+using Microsoft.Net.Http.Headers;
 
 namespace Projects_Management_System_Naseej.Controllers
 {
@@ -132,7 +134,7 @@ namespace Projects_Management_System_Naseej.Controllers
             }
         }
 
-
+        [Authorize(Policy = "Editor")]
         [HttpPut("{fileId}")]
         public async Task<ActionResult<FileDTO>> UpdateFile(int fileId, [FromForm] UpdateFileDTO updateFileDTO)
         {
@@ -143,10 +145,34 @@ namespace Projects_Management_System_Naseej.Controllers
                     return BadRequest(ModelState);
                 }
 
+                // Extract the token from the Authorization header
+                var authHeader = Request.Headers["Authorization"].ToString();
+                if (string.IsNullOrEmpty(authHeader) || !authHeader.StartsWith("Bearer "))
+                {
+                    return Unauthorized("Invalid or missing Authorization header");
+                }
+
+                var token = authHeader.Substring("Bearer ".Length).Trim();
+
+                // Validate the token
+                var tokenService = new TokenService(_configuration["Jwt:Key"]);
+                var principal = tokenService.ValidateToken(token);
+
+                if (principal == null)
+                {
+                    return Unauthorized("Invalid token");
+                }
+
+                var userIdClaim = principal.FindFirst("UserId");
+                if (userIdClaim == null || !int.TryParse(userIdClaim.Value, out int updatedBy))
+                {
+                    return BadRequest("Invalid user ID in the token.");
+                }
+
                 var updatedFile = await _fileRepository.UpdateFileAsync(
                     fileId,
                     updateFileDTO.File,
-                    2, // Use a default user ID, e.g., 2
+                    updatedBy,
                     updateFileDTO
                 );
 
@@ -162,6 +188,9 @@ namespace Projects_Management_System_Naseej.Controllers
                 return StatusCode(500, new { message = "An error occurred while updating the file.", details = ex.Message });
             }
         }
+
+
+
         private async Task ValidateFile(IFormFile file)
         {
             if (file.Length == 0)
@@ -181,6 +210,8 @@ namespace Projects_Management_System_Naseej.Controllers
                 throw new ArgumentException("Invalid file type. Allowed types are: PDF, Excel, Word, and Text.");
             }
         }
+
+
 
         [HttpGet("serve/{fileName}")]
         public async Task<IActionResult> ServeFile(string fileName, [FromQuery] bool view = false)
@@ -206,42 +237,24 @@ namespace Projects_Management_System_Naseej.Controllers
 
                 // Determine content type based on file extension
                 var contentType = GetContentType(fileName);
+                var fileExtension = Path.GetExtension(fileName).ToLowerInvariant();
 
-                // Set inline disposition based on view parameter or file type
-                var useInlineDisposition = view;
+                // List of file extensions that should be viewed inline
+                string[] inlineExtensions = new[] { ".pdf", ".jpg", ".jpeg", ".png", ".gif", ".bmp", ".webp", ".txt", ".html" };
 
-                // Handle file serving based on file type and view parameter
-                if (fileName.EndsWith(".xlsx", StringComparison.OrdinalIgnoreCase) || fileName.EndsWith(".xls", StringComparison.OrdinalIgnoreCase))
-                {
-                    var fileBytes = await System.IO.File.ReadAllBytesAsync(filePath);
-                    return File(fileBytes,
-                        "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet",
-                        fileName,
-                        useInlineDisposition);
-                }
-                else if (useInlineDisposition && (fileName.EndsWith(".pdf", StringComparison.OrdinalIgnoreCase) || fileName.EndsWith(".txt", StringComparison.OrdinalIgnoreCase) ||
-                    fileName.EndsWith(".html", StringComparison.OrdinalIgnoreCase) || fileName.EndsWith(".jpg", StringComparison.OrdinalIgnoreCase) ||
-                    fileName.EndsWith(".jpeg", StringComparison.OrdinalIgnoreCase) || fileName.EndsWith(".png", StringComparison.OrdinalIgnoreCase) ||
-                    fileName.EndsWith(".gif", StringComparison.OrdinalIgnoreCase)))
-                {
-                    return PhysicalFile(filePath, contentType, fileName, true);
-                }
-                else if (fileName.EndsWith(".docx", StringComparison.OrdinalIgnoreCase) || fileName.EndsWith(".doc", StringComparison.OrdinalIgnoreCase))
-                {
-                    return PhysicalFile(filePath, contentType, fileName, false);
-                }
-                else if (fileName.EndsWith(".mp3", StringComparison.OrdinalIgnoreCase) || fileName.EndsWith(".wav", StringComparison.OrdinalIgnoreCase))
-                {
-                    return PhysicalFile(filePath, contentType, fileName, true);
-                }
-                else if (fileName.EndsWith(".mp4", StringComparison.OrdinalIgnoreCase) || fileName.EndsWith(".avi", StringComparison.OrdinalIgnoreCase))
-                {
-                    return PhysicalFile(filePath, contentType, fileName, true);
-                }
-                else
-                {
-                    return PhysicalFile(filePath, contentType, fileName, false);
-                }
+                // Determine disposition
+                var disposition = (view && inlineExtensions.Contains(fileExtension))
+                    ? "inline"
+                    : "attachment";
+
+                // Read file as byte array
+                var fileBytes = await System.IO.File.ReadAllBytesAsync(filePath);
+
+                // Set content disposition header
+                Response.Headers.Add("Content-Disposition", $"{disposition}; filename=\"{fileName}\"");
+
+                // Return file
+                return File(fileBytes, contentType);
             }
             catch (Exception ex)
             {
@@ -408,10 +421,7 @@ namespace Projects_Management_System_Naseej.Controllers
                 }
 
                 // Use the full file path from the database
-                var filePath = file.FilePath;
-
-                // Normalize the file path (remove duplicate wwwroot)
-                filePath = filePath.Replace("wwwroot/wwwroot", "wwwroot");
+                var filePath = file.FilePath.Replace("wwwroot/wwwroot", "wwwroot");
 
                 // Check if file exists
                 if (!System.IO.File.Exists(filePath))
@@ -422,11 +432,8 @@ namespace Projects_Management_System_Naseej.Controllers
                 // Determine content type based on file extension
                 var contentType = GetContentType(fileName);
 
-                // Read file bytes
-                var fileBytes = await System.IO.File.ReadAllBytesAsync(filePath);
-
-                // Return file content
-                return File(fileBytes, contentType);
+                // Serve the file with inline disposition
+                return PhysicalFile(filePath, contentType, fileName, true);
             }
             catch (Exception ex)
             {
@@ -436,7 +443,7 @@ namespace Projects_Management_System_Naseej.Controllers
             }
         }
 
-        // Helper method to determine content type with inline disposition
+
 
         private IActionResult ServeFileWithInlineDisposition(string filePath, string contentType, string fileName)
         {
@@ -451,19 +458,28 @@ namespace Projects_Management_System_Naseej.Controllers
             var ext = Path.GetExtension(fileName).ToLowerInvariant();
             return ext switch
             {
+                // Images
+                ".jpg" or ".jpeg" => "image/jpeg",
+                ".png" => "image/png",
+                ".gif" => "image/gif",
+                ".bmp" => "image/bmp",
+                ".webp" => "image/webp",
+
+                // Documents
                 ".pdf" => "application/pdf",
                 ".doc" => "application/msword",
                 ".docx" => "application/vnd.openxmlformats-officedocument.wordprocessingml.document",
                 ".xls" => "application/vnd.ms-excel",
                 ".xlsx" => "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet",
+
+                // Text-based
                 ".txt" => "text/plain",
-                ".jpg" or ".jpeg" => "image/jpeg",
-                ".png" => "image/png",
-                ".gif" => "image/gif",
+                ".html" => "text/html",
                 ".csv" => "text/csv",
-                ".ppt" or ".pptx" => "application/vnd.ms-powerpoint",
+
+                // Default
                 _ => "application/octet-stream"
             };
         }
     }
-}
+    }

@@ -17,13 +17,12 @@ var builder = WebApplication.CreateBuilder(args);
 // CORS Configuration (Allow All Origins)
 builder.Services.AddCors(options =>
 {
-    options.AddPolicy("AllowAll",
-        policy =>
-        {
-            policy.AllowAnyOrigin()
-                  .AllowAnyHeader()
-                  .AllowAnyMethod();
-        });
+    options.AddPolicy("AllowAll", builder =>
+    {
+        builder.AllowAnyOrigin()
+               .AllowAnyMethod()
+               .AllowAnyHeader();
+    });
 });
 
 builder.Services.AddLogging();
@@ -67,7 +66,13 @@ builder.Services.AddAuthentication(options =>
     };
 });
 
-builder.Services.AddControllers();
+builder.Services.AddControllers()
+        .ConfigureApiBehaviorOptions(options =>
+        {
+            options.SuppressMapClientErrors = true;
+        });
+
+
 // Learn more about configuring Swagger/OpenAPI at https://aka.ms/aspnetcore/swashbuckle
 builder.Services.AddEndpointsApiExplorer();
 builder.Services.AddSwaggerGen();
@@ -93,7 +98,7 @@ if (app.Environment.IsDevelopment())
 app.UseHttpsRedirection();
 //app.UseMiddleware<CustomAuthenticationMiddleware>();
 app.UseCors("AllowAll");
-
+app.UseStaticFiles();
 app.UseAuthentication();
 app.UseAuthorization();
 

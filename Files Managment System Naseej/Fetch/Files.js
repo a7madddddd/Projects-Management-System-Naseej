@@ -763,8 +763,28 @@ const FileActions = {
             // Use the specific 'serve' endpoint with query parameter
             const fileUrl = `https://localhost:44320/api/Files/serve/${encodeURIComponent(fullFileName)}?view=true`;
 
-            // Open file directly in browser
-            window.open(fileUrl, '_blank');
+            // Fetch the file
+            const response = await fetch(fileUrl, {
+                method: 'GET',
+                headers: {
+                    'Authorization': `Bearer ${sessionStorage.getItem('authToken')}`,
+                    'Accept': 'application/pdf, image/*, text/plain'
+                }
+            });
+
+            // Check if response is ok
+            if (!response.ok) {
+                throw new Error('Failed to fetch file');
+            }
+
+            // Get blob
+            const blob = await response.blob();
+
+            // Create a URL for the blob
+            const blobUrl = window.URL.createObjectURL(blob);
+
+            // Open in new window
+            window.open(blobUrl, '_blank');
 
         } catch (error) {
             console.error('Open file error:', error);

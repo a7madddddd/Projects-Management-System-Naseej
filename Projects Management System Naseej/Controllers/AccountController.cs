@@ -40,11 +40,11 @@ namespace Projects_Management_System_Naseej.Controllers
                 var userRoles = await _userRepository.GetUserRolesAsync(user.UserId);
 
                 var claims = new List<Claim>
-        {
-            new Claim(ClaimTypes.Name, user.Username),
-            new Claim(ClaimTypes.NameIdentifier, user.UserId.ToString()),
-            new Claim("UserId", user.UserId.ToString())
-        };
+                {
+                    new Claim(ClaimTypes.Name, user.Username),
+                    new Claim(ClaimTypes.NameIdentifier, user.UserId.ToString()),
+                    new Claim("UserId", user.UserId.ToString())
+                };
 
                 // Add role claims
                 foreach (var role in userRoles)
@@ -74,6 +74,7 @@ namespace Projects_Management_System_Naseej.Controllers
 
             return Unauthorized("Invalid username, email, or password.");
         }
+
 
         [HttpPost("{userId}/roles/{roleId}")]
         public async Task<IActionResult> AssignRoleToUser(int userId, int roleId)

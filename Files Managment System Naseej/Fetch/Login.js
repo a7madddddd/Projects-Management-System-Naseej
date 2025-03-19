@@ -48,9 +48,9 @@ function checkAuthentication() {
     // If no token, prevent access to protected pages
     if (!token) {
         // Redirect to login or show login modal
-        alert('Please log in to access this page');
-        // Optionally redirect to login page
-        window.location.href = 'auth-login.html';
+        // alert('Please log in to access this page');
+        // // Optionally redirect to login page
+        // window.location.href = 'auth-login.html';
     }
 }
 
