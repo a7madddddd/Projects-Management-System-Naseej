@@ -133,7 +133,6 @@ namespace Projects_Management_System_Naseej.Controllers
         }
 
 
-
         [HttpPut("{fileId}")]
         public async Task<ActionResult<FileDTO>> UpdateFile(int fileId, [FromForm] UpdateFileDTO updateFileDTO)
         {
@@ -144,100 +143,25 @@ namespace Projects_Management_System_Naseej.Controllers
                     return BadRequest(ModelState);
                 }
 
-                // Find the existing file
-                var existingFile = await _context.Files.FindAsync(fileId);
-                if (existingFile == null)
+                var updatedFile = await _fileRepository.UpdateFileAsync(
+                    fileId,
+                    updateFileDTO.File,
+                    2, // Use a default user ID, e.g., 2
+                    updateFileDTO
+                );
+
+                if (updatedFile == null)
                 {
                     return NotFound($"File with ID {fileId} not found.");
                 }
 
-                // Prepare upload paths
-                var uploadDirectory = _configuration["UploadSettings:UploadDirectory"];
-                var uploadsPath = Path.Combine(_environment.WebRootPath, uploadDirectory);
-
-                // Ensure directory exists
-                if (!Directory.Exists(uploadsPath))
-                {
-                    Directory.CreateDirectory(uploadsPath);
-                }
-
-                // Handle file update
-                if (updateFileDTO.File != null && updateFileDTO.File.Length > 0)
-                {
-                    // Validate file
-                    await ValidateFile(updateFileDTO.File);
-
-                    // Generate unique filename
-                    var uniqueFileName = $"{Guid.NewGuid()}{Path.GetExtension(updateFileDTO.File.FileName)}";
-                    var newFilePath = Path.Combine(uploadsPath, uniqueFileName);
-
-                    // Delete existing file if it exists
-                    if (!string.IsNullOrEmpty(existingFile.FilePath) && System.IO.File.Exists(existingFile.FilePath))
-                    {
-                        System.IO.File.Delete(existingFile.FilePath);
-                    }
-
-                    // Save new file
-                    using (var stream = new FileStream(newFilePath, FileMode.Create))
-                    {
-                        await updateFileDTO.File.CopyToAsync(stream);
-                    }
-
-                    // Update file properties
-                    existingFile.FileName = updateFileDTO.FileName ?? Path.GetFileNameWithoutExtension(updateFileDTO.File.FileName);
-                    existingFile.FileExtension = Path.GetExtension(updateFileDTO.File.FileName);
-                    existingFile.FilePath = newFilePath;
-                    existingFile.FileSize = updateFileDTO.File.Length;
-                }
-                else
-                {
-                    // Update only file name if no new file is provided
-                    if (!string.IsNullOrEmpty(updateFileDTO.FileName))
-                    {
-                        existingFile.FileName = updateFileDTO.FileName;
-                    }
-                }
-
-                // Update other properties
-                if (updateFileDTO.CategoryId.HasValue)
-                {
-                    existingFile.CategoryId = updateFileDTO.CategoryId.Value;
-                }
-
-                if (updateFileDTO.IsPublic.HasValue)
-                {
-                    existingFile.IsPublic = updateFileDTO.IsPublic.Value;
-                }
-
-                existingFile.LastModifiedBy = 2; // Use a default user ID, e.g., 2
-                existingFile.LastModifiedDate = DateTime.UtcNow;
-
-                // Save changes
-                await _context.SaveChangesAsync();
-
-                // Return updated file DTO
-                return Ok(new FileDTO
-                {
-                    FileId = existingFile.FileId,
-                    FileName = existingFile.FileName,
-                    FileExtension = existingFile.FileExtension,
-                    FilePath = existingFile.FilePath,
-                    FileSize = existingFile.FileSize,
-                    CategoryId = existingFile.CategoryId,
-                    UploadedBy = existingFile.UploadedBy,
-                    UploadDate = existingFile.UploadDate ?? DateTime.MinValue,
-                    LastModifiedBy = existingFile.LastModifiedBy,
-                    LastModifiedDate = existingFile.LastModifiedDate,
-                    IsActive = existingFile.IsActive ?? false,
-                    IsPublic = existingFile.IsPublic ?? false
-                });
+                return Ok(updatedFile);
             }
             catch (Exception ex)
             {
                 return StatusCode(500, new { message = "An error occurred while updating the file.", details = ex.Message });
             }
         }
-
         private async Task ValidateFile(IFormFile file)
         {
             if (file.Length == 0)
