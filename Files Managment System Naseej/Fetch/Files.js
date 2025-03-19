@@ -756,36 +756,26 @@ const FileActions = {
         try {
             // Fetch file details to get the full file path
             const fileDetails = await apiCall(`https://localhost:44320/api/Files/${fileId}`);
-
-            // Construct the file URL 
             const fullFileName = fileDetails.fileName + fileDetails.fileExtension;
 
-            // Use the specific 'serve' endpoint with query parameter
-            const fileUrl = `https://localhost:44320/api/Files/serve/${encodeURIComponent(fullFileName)}?view=true`;
+            // Check if it's an Excel file
+            if (fileExtension === '.xlsx' || fileExtension === '.xls') {
+                // For Excel files, we'll use a download approach or a special viewer
+                const downloadUrl = `https://localhost:44320/api/Files/serve/${encodeURIComponent(fullFileName)}`;
 
-            // Fetch the file
-            const response = await fetch(fileUrl, {
-                method: 'GET',
-                headers: {
-                    'Authorization': `Bearer ${sessionStorage.getItem('authToken')}`,
-                    'Accept': 'application/pdf, image/*, text/plain'
-                }
-            });
+                // Option 1: Just download the file
+                // window.location.href = downloadUrl;
 
-            // Check if response is ok
-            if (!response.ok) {
-                throw new Error('Failed to fetch file');
+                // Option 2: Use Office Online Viewer (if you have a publicly accessible URL)
+                const publicUrl = `https://your-public-domain.com/files/${encodeURIComponent(fullFileName)}`;
+                window.open(`https://view.officeapps.live.com/op/view.aspx?src=${encodeURIComponent(publicUrl)}`, '_blank');
+
+                return;
             }
 
-            // Get blob
-            const blob = await response.blob();
-
-            // Create a URL for the blob
-            const blobUrl = window.URL.createObjectURL(blob);
-
-            // Open in new window
-            window.open(blobUrl, '_blank');
-
+            // For other file types, open inline
+            const fileUrl = `https://localhost:44320/api/Files/view/${encodeURIComponent(fullFileName)}`;
+            window.open(fileUrl, '_blank');
         } catch (error) {
             console.error('Open file error:', error);
             Swal.fire({
@@ -796,7 +786,6 @@ const FileActions = {
             });
         }
     },
-
 
 
 

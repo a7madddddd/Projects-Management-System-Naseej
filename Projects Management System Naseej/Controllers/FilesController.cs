@@ -15,6 +15,7 @@ using System.IdentityModel.Tokens.Jwt;
 using System.Text;
 using System.Net.Mime;
 using Microsoft.Net.Http.Headers;
+using System.Net.Http.Headers;
 
 namespace Projects_Management_System_Naseej.Controllers
 {
@@ -212,7 +213,6 @@ namespace Projects_Management_System_Naseej.Controllers
         }
 
 
-
         [HttpGet("serve/{fileName}")]
         public async Task<IActionResult> ServeFile(string fileName, [FromQuery] bool view = false)
         {
@@ -240,21 +240,29 @@ namespace Projects_Management_System_Naseej.Controllers
                 var fileExtension = Path.GetExtension(fileName).ToLowerInvariant();
 
                 // List of file extensions that should be viewed inline
-                string[] inlineExtensions = new[] { ".pdf", ".jpg", ".jpeg", ".png", ".gif", ".bmp", ".webp", ".txt", ".html" };
+                string[] inlineExtensions = new[] {
+            ".pdf", ".jpg", ".jpeg", ".png", ".gif", ".bmp", ".webp",
+            ".txt", ".html", ".xls", ".xlsx"
+        };
 
-                // Determine disposition
-                var disposition = (view && inlineExtensions.Contains(fileExtension))
-                    ? "inline"
-                    : "attachment";
+                // Determine if file should be viewed inline
+                bool shouldViewInline = view && inlineExtensions.Contains(fileExtension);
 
-                // Read file as byte array
-                var fileBytes = await System.IO.File.ReadAllBytesAsync(filePath);
+                // Create file stream
+                var fileStream = System.IO.File.OpenRead(filePath);
 
-                // Set content disposition header
-                Response.Headers.Add("Content-Disposition", $"{disposition}; filename=\"{fileName}\"");
+                // Set content disposition based on view parameter
+                if (shouldViewInline)
+                {
+                    Response.Headers.Add("Content-Disposition", $"inline; filename=\"{fileName}\"");
+                }
+                else
+                {
+                    Response.Headers.Add("Content-Disposition", $"attachment; filename=\"{fileName}\"");
+                }
 
-                // Return file
-                return File(fileBytes, contentType);
+                // Return the file
+                return File(fileStream, contentType, enableRangeProcessing: true);
             }
             catch (Exception ex)
             {
@@ -266,6 +274,123 @@ namespace Projects_Management_System_Naseej.Controllers
                 });
             }
         }
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+        // Comprehensive content type method
+        private string GetContentType(string fileName)
+        {
+            var ext = Path.GetExtension(fileName).ToLowerInvariant();
+            return ext switch
+            {
+                // Images
+                ".jpg" or ".jpeg" => "image/jpeg",
+                ".png" => "image/png",
+                ".gif" => "image/gif",
+                ".bmp" => "image/bmp",
+                ".webp" => "image/webp",
+
+                // Documents
+                ".pdf" => "application/pdf",
+                ".doc" => "application/msword",
+                ".docx" => "application/vnd.openxmlformats-officedocument.wordprocessingml.document",
+
+                // Excel files
+                ".xls" => "application/vnd.ms-excel",
+                ".xlsx" => "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet",
+
+                // Text-based
+                ".txt" => "text/plain",
+                ".html" => "text/html",
+                ".csv" => "text/csv",
+
+                // Default
+                _ => "application/octet-stream"
+            };
+        }
+        private IActionResult ServeFileWithInlineDisposition(string filePath, string contentType, string fileName)
+        {
+            // Create file stream
+            var fileStream = System.IO.File.OpenRead(filePath);
+            // Return file with inline content disposition
+            return File(fileStream, contentType, fileName, enableRangeProcessing: true);
+        }
+
+
+        [HttpGet("view/{fileName}")]
+        public async Task<IActionResult> ViewFile(string fileName)
+        {
+            try
+            {
+                // Find the file in the database
+                var file = await _context.Files
+                    .FirstOrDefaultAsync(f => f.FileName + f.FileExtension == fileName);
+
+                if (file == null)
+                {
+                    return NotFound($"File {fileName} not found in database.");
+                }
+
+                // Use the full file path from the database
+                var filePath = file.FilePath.Replace("wwwroot/wwwroot", "wwwroot");
+
+                // Check if file exists
+                if (!System.IO.File.Exists(filePath))
+                {
+                    return NotFound($"File not found on the server. Path: {filePath}");
+                }
+
+                // Determine content type based on file extension
+                var contentType = GetContentType(fileName);
+                var fileExtension = Path.GetExtension(fileName).ToLowerInvariant();
+
+                // Special handling for Excel files
+                if (fileExtension == ".xlsx" || fileExtension == ".xls")
+                {
+                    // For Excel files, we'll redirect to a publicly accessible URL
+                    // First, we need to save the file to a temporary location or make it accessible via a URL
+
+                    // This is a placeholder - you'll need to implement logic to generate a public URL for the file
+                    var publicUrl = $"https://localhost:44320/temp/{fileName}";
+
+                    // Redirect to Office Online Viewer
+                    return Redirect($"https://view.officeapps.live.com/op/view.aspx?src={Uri.EscapeDataString(publicUrl)}");
+                }
+
+                // For other file types, continue with inline viewing
+                Response.Headers.Add("Content-Disposition", $"inline; filename=\"{fileName}\"");
+                var fileStream = System.IO.File.OpenRead(filePath);
+                return File(fileStream, contentType, enableRangeProcessing: true);
+            }
+            catch (Exception ex)
+            {
+                _logger.LogError(ex, $"Error viewing file: {fileName}");
+                return StatusCode(500, $"An error occurred while viewing the file: {ex.Message}");
+            }
+        }
+
+
+
+
+
+
+
+
+
+
+
 
         [HttpGet("category/{categoryId}")]
         public async Task<ActionResult<IEnumerable<FileDTO>>> GetFilesByCategory(int categoryId)
@@ -406,80 +531,9 @@ namespace Projects_Management_System_Naseej.Controllers
             }
         }
 
-        [HttpGet("view/{fileName}")]
-        public async Task<IActionResult> ViewFile(string fileName)
-        {
-            try
-            {
-                // Find the file in the database
-                var file = await _context.Files
-                    .FirstOrDefaultAsync(f => f.FileName + f.FileExtension == fileName);
-
-                if (file == null)
-                {
-                    return NotFound($"File {fileName} not found in database.");
-                }
-
-                // Use the full file path from the database
-                var filePath = file.FilePath.Replace("wwwroot/wwwroot", "wwwroot");
-
-                // Check if file exists
-                if (!System.IO.File.Exists(filePath))
-                {
-                    return NotFound($"File not found on the server. Path: {filePath}");
-                }
-
-                // Determine content type based on file extension
-                var contentType = GetContentType(fileName);
-
-                // Serve the file with inline disposition
-                return PhysicalFile(filePath, contentType, fileName, true);
-            }
-            catch (Exception ex)
-            {
-                // Log the exception
-                _logger.LogError(ex, $"Error viewing file: {fileName}");
-                return StatusCode(500, $"An error occurred while viewing the file: {ex.Message}");
-            }
-        }
 
 
 
-        private IActionResult ServeFileWithInlineDisposition(string filePath, string contentType, string fileName)
-        {
-            // Create file stream
-            var fileStream = System.IO.File.OpenRead(filePath);
-            // Return file with inline content disposition
-            return File(fileStream, contentType, fileName, enableRangeProcessing: true);
-        }
 
-        private string GetContentType(string fileName)
-        {
-            var ext = Path.GetExtension(fileName).ToLowerInvariant();
-            return ext switch
-            {
-                // Images
-                ".jpg" or ".jpeg" => "image/jpeg",
-                ".png" => "image/png",
-                ".gif" => "image/gif",
-                ".bmp" => "image/bmp",
-                ".webp" => "image/webp",
-
-                // Documents
-                ".pdf" => "application/pdf",
-                ".doc" => "application/msword",
-                ".docx" => "application/vnd.openxmlformats-officedocument.wordprocessingml.document",
-                ".xls" => "application/vnd.ms-excel",
-                ".xlsx" => "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet",
-
-                // Text-based
-                ".txt" => "text/plain",
-                ".html" => "text/html",
-                ".csv" => "text/csv",
-
-                // Default
-                _ => "application/octet-stream"
-            };
-        }
     }
-    }
+}
