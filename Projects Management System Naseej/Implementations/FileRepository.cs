@@ -19,7 +19,6 @@ namespace Projects_Management_System_Naseej.Implementations
         private readonly IHttpContextAccessor _httpContextAccessor;
         private readonly IConfiguration _configuration;
         private readonly IWebHostEnvironment _environment;
-        private readonly ILogger _logger;
 
         public FileRepository(MyDbContext context, IEnumerable<IFileTypeHandler> fileTypeHandlers, IHttpContextAccessor httpContextAccessor, IConfiguration configuration, IWebHostEnvironment environment
     )
@@ -170,41 +169,63 @@ namespace Projects_Management_System_Naseej.Implementations
         {
             try
             {
+
                 var existingFile = await _context.Files.FindAsync(fileId);
-                if (existingFile == null) return null;
+                if (existingFile == null)
+                {
+                    return null;
+                }
 
                 // Prepare upload paths
-                var wwwrootPath = _environment.WebRootPath;
-                var uploadsPath = Path.Combine(wwwrootPath, "Files");
-                Directory.CreateDirectory(uploadsPath);
+                var uploadDirectory = _configuration["UploadSettings:UploadDirectory"];
+                var uploadsPath = Path.Combine(_environment.WebRootPath, uploadDirectory);
+
+                // Ensure directory exists
+                if (!Directory.Exists(uploadsPath))
+                {
+                    Directory.CreateDirectory(uploadsPath);
+                }
 
                 // Handle file update
                 if (file != null && file.Length > 0)
                 {
+                    // Validate file
+                    await ValidateFile(file);
+
                     // Generate unique filename
-                    var uniqueFileName = $"{Guid.NewGuid()}_{file.FileName}";
-                    var filePath = Path.Combine(uploadsPath, uniqueFileName);
+                    var uniqueFileName = $"{Guid.NewGuid()}{Path.GetExtension(file.FileName)}";
+                    var newFilePath = Path.Combine(uploadsPath, uniqueFileName);
 
                     // Delete existing file if it exists
-                    if (!string.IsNullOrEmpty(existingFile.FilePath) &&
-                        System.IO.File.Exists(existingFile.FilePath))
+                    if (!string.IsNullOrEmpty(existingFile.FilePath) && System.IO.File.Exists(existingFile.FilePath))
                     {
-                        System.IO.File.Delete(existingFile.FilePath);
+                        try
+                        {
+                            System.IO.File.Delete(existingFile.FilePath);
+                        }
+                        catch (IOException ex)
+                        {
+                            throw new Exception($"Failed to delete existing file: {ex.Message}", ex);
+                        }
                     }
 
                     // Save new file
-                    using (var stream = new FileStream(filePath, FileMode.Create))
+                    try
                     {
-                        await file.CopyToAsync(stream);
+                        using (var stream = new FileStream(newFilePath, FileMode.Create))
+                        {
+                            await file.CopyToAsync(stream);
+                        }
                     }
-
-                    // Validate file
-                    await ValidateFile(file);
+                    catch (IOException ex)
+                    {
+                        throw new Exception($"Failed to save new file: {ex.Message}", ex);
+                    }
 
                     // Update file properties
                     existingFile.FileName = updateFileDTO.FileName ?? Path.GetFileNameWithoutExtension(file.FileName);
                     existingFile.FileExtension = Path.GetExtension(file.FileName);
-                    existingFile.FilePath = filePath;
+                    existingFile.FilePath = newFilePath;
                     existingFile.FileSize = file.Length;
                 }
                 else
@@ -217,7 +238,6 @@ namespace Projects_Management_System_Naseej.Implementations
                 }
 
                 // Update other properties
-                // Only update if the value is provided
                 if (updateFileDTO.CategoryId.HasValue)
                 {
                     existingFile.CategoryId = updateFileDTO.CategoryId.Value;
@@ -232,7 +252,14 @@ namespace Projects_Management_System_Naseej.Implementations
                 existingFile.LastModifiedDate = DateTime.UtcNow;
 
                 // Save changes
-                await _context.SaveChangesAsync();
+                try
+                {
+                    await _context.SaveChangesAsync();
+                }
+                catch (DbUpdateException ex)
+                {
+                    throw new Exception($"Database error while updating file: {ex.Message}", ex);
+                }
 
                 // Return updated file DTO
                 return new FileDTO
@@ -256,9 +283,6 @@ namespace Projects_Management_System_Naseej.Implementations
                 throw new Exception($"An error occurred while updating the file: {ex.Message}", ex);
             }
         }
-
-
-
         public async Task DeleteFileAsync(int fileId)
         {
             var file = await _context.Files.FindAsync(fileId);

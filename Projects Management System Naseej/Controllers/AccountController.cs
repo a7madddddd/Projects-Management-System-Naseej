@@ -59,7 +59,7 @@ namespace Projects_Management_System_Naseej.Controllers
                     issuer: _configuration["Jwt:Issuer"],
                     audience: _configuration["Jwt:Audience"],
                     claims: claims,
-                    expires: DateTime.Now.AddHours(1),
+                    expires: DateTime.Now.AddHours(8),
                     signingCredentials: creds);
 
                 return Ok(new

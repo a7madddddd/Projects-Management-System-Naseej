@@ -10,6 +10,9 @@ using System.Threading.Tasks;
 using Microsoft.Extensions.Logging;
 using Projects_Management_System_Naseej.Models;
 using Microsoft.EntityFrameworkCore;
+using Microsoft.IdentityModel.Tokens;
+using System.IdentityModel.Tokens.Jwt;
+using System.Text;
 
 namespace Projects_Management_System_Naseej.Controllers
 {
@@ -27,10 +30,10 @@ namespace Projects_Management_System_Naseej.Controllers
 )
         {
             _fileRepository = fileRepository;
-            _logger = logger;
-            configuration = _configuration;
-            _environment = environment;
-            _context = context;
+            _logger = logger ?? throw new ArgumentNullException(nameof(logger));
+            _configuration = configuration ?? throw new ArgumentNullException(nameof(configuration));
+            _environment = environment ?? throw new ArgumentNullException(nameof(environment));
+            _context = context ?? throw new ArgumentNullException(nameof(context));
 
         }
 
@@ -141,38 +144,119 @@ namespace Projects_Management_System_Naseej.Controllers
                     return BadRequest(ModelState);
                 }
 
-                var userIdClaim = User.FindFirst("UserId");
-                if (userIdClaim == null)
-                {
-                    return Unauthorized("User ID not found in the token.");
-                }
-
-                if (!int.TryParse(userIdClaim.Value, out int updatedBy))
-                {
-                    return BadRequest("Invalid user ID in the token.");
-                }
-
-                var updatedFile = await _fileRepository.UpdateFileAsync(
-                    fileId,
-                    updateFileDTO.File,
-                    updatedBy,
-                    updateFileDTO
-                );
-
-                if (updatedFile == null)
+                // Find the existing file
+                var existingFile = await _context.Files.FindAsync(fileId);
+                if (existingFile == null)
                 {
                     return NotFound($"File with ID {fileId} not found.");
                 }
 
-                return Ok(updatedFile);
+                // Prepare upload paths
+                var uploadDirectory = _configuration["UploadSettings:UploadDirectory"];
+                var uploadsPath = Path.Combine(_environment.WebRootPath, uploadDirectory);
+
+                // Ensure directory exists
+                if (!Directory.Exists(uploadsPath))
+                {
+                    Directory.CreateDirectory(uploadsPath);
+                }
+
+                // Handle file update
+                if (updateFileDTO.File != null && updateFileDTO.File.Length > 0)
+                {
+                    // Validate file
+                    await ValidateFile(updateFileDTO.File);
+
+                    // Generate unique filename
+                    var uniqueFileName = $"{Guid.NewGuid()}{Path.GetExtension(updateFileDTO.File.FileName)}";
+                    var newFilePath = Path.Combine(uploadsPath, uniqueFileName);
+
+                    // Delete existing file if it exists
+                    if (!string.IsNullOrEmpty(existingFile.FilePath) && System.IO.File.Exists(existingFile.FilePath))
+                    {
+                        System.IO.File.Delete(existingFile.FilePath);
+                    }
+
+                    // Save new file
+                    using (var stream = new FileStream(newFilePath, FileMode.Create))
+                    {
+                        await updateFileDTO.File.CopyToAsync(stream);
+                    }
+
+                    // Update file properties
+                    existingFile.FileName = updateFileDTO.FileName ?? Path.GetFileNameWithoutExtension(updateFileDTO.File.FileName);
+                    existingFile.FileExtension = Path.GetExtension(updateFileDTO.File.FileName);
+                    existingFile.FilePath = newFilePath;
+                    existingFile.FileSize = updateFileDTO.File.Length;
+                }
+                else
+                {
+                    // Update only file name if no new file is provided
+                    if (!string.IsNullOrEmpty(updateFileDTO.FileName))
+                    {
+                        existingFile.FileName = updateFileDTO.FileName;
+                    }
+                }
+
+                // Update other properties
+                if (updateFileDTO.CategoryId.HasValue)
+                {
+                    existingFile.CategoryId = updateFileDTO.CategoryId.Value;
+                }
+
+                if (updateFileDTO.IsPublic.HasValue)
+                {
+                    existingFile.IsPublic = updateFileDTO.IsPublic.Value;
+                }
+
+                existingFile.LastModifiedBy = 2; // Use a default user ID, e.g., 2
+                existingFile.LastModifiedDate = DateTime.UtcNow;
+
+                // Save changes
+                await _context.SaveChangesAsync();
+
+                // Return updated file DTO
+                return Ok(new FileDTO
+                {
+                    FileId = existingFile.FileId,
+                    FileName = existingFile.FileName,
+                    FileExtension = existingFile.FileExtension,
+                    FilePath = existingFile.FilePath,
+                    FileSize = existingFile.FileSize,
+                    CategoryId = existingFile.CategoryId,
+                    UploadedBy = existingFile.UploadedBy,
+                    UploadDate = existingFile.UploadDate ?? DateTime.MinValue,
+                    LastModifiedBy = existingFile.LastModifiedBy,
+                    LastModifiedDate = existingFile.LastModifiedDate,
+                    IsActive = existingFile.IsActive ?? false,
+                    IsPublic = existingFile.IsPublic ?? false
+                });
             }
             catch (Exception ex)
             {
-                _logger.LogError(ex, $"Error updating file with ID: {fileId}");
-                return StatusCode(500, new { message = "An error occurred while updating the file." });
+                return StatusCode(500, new { message = "An error occurred while updating the file.", details = ex.Message });
             }
         }
 
+        private async Task ValidateFile(IFormFile file)
+        {
+            if (file.Length == 0)
+            {
+                throw new ArgumentException("File is empty.");
+            }
+
+            if (file.Length > 10 * 1024 * 1024) // 10 MB
+            {
+                throw new ArgumentException("File size exceeds the maximum allowed size of 10 MB.");
+            }
+
+            var allowedExtensions = new[] { ".pdf", ".xlsx", ".xls", ".docx", ".txt" };
+            var fileExtension = Path.GetExtension(file.FileName).ToLower();
+            if (!allowedExtensions.Contains(fileExtension))
+            {
+                throw new ArgumentException("Invalid file type. Allowed types are: PDF, Excel, Word, and Text.");
+            }
+        }
 
         [HttpGet("serve/{fileName}")]
         public async Task<IActionResult> ServeFile(string fileName, [FromQuery] bool view = false)
@@ -202,8 +286,8 @@ namespace Projects_Management_System_Naseej.Controllers
                 // Set inline disposition based on view parameter or file type
                 var useInlineDisposition = view;
 
-                // Special handling for Excel files
-                if (fileName.EndsWith(".xlsx") || fileName.EndsWith(".xls"))
+                // Handle file serving based on file type and view parameter
+                if (fileName.EndsWith(".xlsx", StringComparison.OrdinalIgnoreCase) || fileName.EndsWith(".xls", StringComparison.OrdinalIgnoreCase))
                 {
                     var fileBytes = await System.IO.File.ReadAllBytesAsync(filePath);
                     return File(fileBytes,
@@ -211,17 +295,29 @@ namespace Projects_Management_System_Naseej.Controllers
                         fileName,
                         useInlineDisposition);
                 }
-
-                // For PDF, HTML, TXT, and image files, use inline disposition when view=true
-                if (useInlineDisposition && (fileName.EndsWith(".pdf") || fileName.EndsWith(".txt") ||
-                    fileName.EndsWith(".html") || fileName.EndsWith(".jpg") || fileName.EndsWith(".jpeg") ||
-                    fileName.EndsWith(".png") || fileName.EndsWith(".gif")))
+                else if (useInlineDisposition && (fileName.EndsWith(".pdf", StringComparison.OrdinalIgnoreCase) || fileName.EndsWith(".txt", StringComparison.OrdinalIgnoreCase) ||
+                    fileName.EndsWith(".html", StringComparison.OrdinalIgnoreCase) || fileName.EndsWith(".jpg", StringComparison.OrdinalIgnoreCase) ||
+                    fileName.EndsWith(".jpeg", StringComparison.OrdinalIgnoreCase) || fileName.EndsWith(".png", StringComparison.OrdinalIgnoreCase) ||
+                    fileName.EndsWith(".gif", StringComparison.OrdinalIgnoreCase)))
                 {
                     return PhysicalFile(filePath, contentType, fileName, true);
                 }
-
-                // For all other files or when view=false, use attachment disposition (download)
-                return PhysicalFile(filePath, contentType, fileName, useInlineDisposition);
+                else if (fileName.EndsWith(".docx", StringComparison.OrdinalIgnoreCase) || fileName.EndsWith(".doc", StringComparison.OrdinalIgnoreCase))
+                {
+                    return PhysicalFile(filePath, contentType, fileName, false);
+                }
+                else if (fileName.EndsWith(".mp3", StringComparison.OrdinalIgnoreCase) || fileName.EndsWith(".wav", StringComparison.OrdinalIgnoreCase))
+                {
+                    return PhysicalFile(filePath, contentType, fileName, true);
+                }
+                else if (fileName.EndsWith(".mp4", StringComparison.OrdinalIgnoreCase) || fileName.EndsWith(".avi", StringComparison.OrdinalIgnoreCase))
+                {
+                    return PhysicalFile(filePath, contentType, fileName, true);
+                }
+                else
+                {
+                    return PhysicalFile(filePath, contentType, fileName, false);
+                }
             }
             catch (Exception ex)
             {
@@ -233,9 +329,6 @@ namespace Projects_Management_System_Naseej.Controllers
                 });
             }
         }
-
-
-
 
         [HttpGet("category/{categoryId}")]
         public async Task<ActionResult<IEnumerable<FileDTO>>> GetFilesByCategory(int categoryId)
@@ -429,7 +522,6 @@ namespace Projects_Management_System_Naseej.Controllers
             return File(fileStream, contentType, fileName, enableRangeProcessing: true);
         }
 
-        // Updated GetContentType method to handle file extensions
         private string GetContentType(string fileName)
         {
             var ext = Path.GetExtension(fileName).ToLowerInvariant();

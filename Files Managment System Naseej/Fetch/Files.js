@@ -620,20 +620,6 @@ const FileActions = {
     async fetchCategories() {
         try {
             const categories = await apiCall('https://localhost:44320/api/FileCategories');
-
-            // Populate category select in update modal
-            const categorySelect = document.getElementById('categorySelect');
-            if (categorySelect) {
-                categorySelect.innerHTML = '<option value="">Select Category</option>';
-
-                categories.forEach(category => {
-                    const option = document.createElement('option');
-                    option.value = category.categoryId;
-                    option.textContent = category.categoryName;
-                    categorySelect.appendChild(option);
-                });
-            }
-
             return categories;
         } catch (error) {
             console.error('Error fetching categories:', error);
@@ -774,8 +760,8 @@ const FileActions = {
             // Construct the file URL 
             const fullFileName = fileDetails.fileName + fileDetails.fileExtension;
 
-            // Use the specific 'view' endpoint instead of 'serve' with query parameter
-            const fileUrl = `https://localhost:44320/api/Files/view/${fullFileName}`;
+            // Use the specific 'serve' endpoint with query parameter
+            const fileUrl = `https://localhost:44320/api/Files/serve/${encodeURIComponent(fullFileName)}?view=true`;
 
             // Open file directly in browser
             window.open(fileUrl, '_blank');
@@ -958,6 +944,7 @@ const FileActions = {
         return true;
     },
 
+
     async updateFile() {
         try {
             // Get the file ID from the button's data attribute
@@ -974,15 +961,15 @@ const FileActions = {
             const formData = new FormData();
 
             // Add file if selected
-            const fileInput = document.getElementById('fileInput');
+            const fileInput = document.getElementById('fileInput2');
             if (fileInput.files.length > 0) {
                 formData.append('File', fileInput.files[0]);
             }
 
             // Add other form fields
-            formData.append('FileName', document.getElementById('fileName').value);
-            formData.append('CategoryId', document.getElementById('categorySelect').value);
-            formData.append('IsPublic', document.getElementById('isPublic').checked);
+            formData.append('FileName', document.getElementById('fileName2').value);
+            formData.append('CategoryId', document.getElementById('updateCategorySelect2').value);
+            formData.append('IsPublic', document.getElementById('isPublic2').checked);
 
             // Show loading
             Swal.fire({
@@ -994,11 +981,20 @@ const FileActions = {
                 }
             });
 
+            // Get the auth token
+            const authToken = sessionStorage.getItem('authToken');
+            if (!authToken) {
+                throw new Error('Authentication token not found in session storage');
+            }
+
+            // Log the token for debugging
+            console.log('Using auth token:', authToken);
+
             // Perform file update
             const response = await fetch(`https://localhost:44320/api/Files/${fileId}`, {
                 method: 'PUT',
                 headers: {
-                    'Authorization': `Bearer ${sessionStorage.getItem('authToken')}`
+                    'Authorization': `Bearer ${authToken}`
                 },
                 body: formData
             });
@@ -1006,7 +1002,16 @@ const FileActions = {
             // Check response
             if (!response.ok) {
                 const errorText = await response.text();
-                throw new Error(errorText || 'File update failed');
+                let errorMessage = 'File update failed';
+                try {
+                    const errorData = JSON.parse(errorText);
+                    errorMessage = errorData.errors ?
+                        Object.values(errorData.errors).flat().join(', ') :
+                        errorData.title || errorMessage;
+                } catch {
+                    // If parsing fails, use the original error message
+                }
+                throw new Error(errorMessage);
             }
 
             // Parse response
@@ -1091,7 +1096,7 @@ const FileActions = {
         }
     },
 
-    
+
 
 
     async editFile(fileId) {
@@ -1131,10 +1136,10 @@ const FileActions = {
         const storedCategories = JSON.parse(sessionStorage.getItem('categories') || '[]');
 
         // Populate file name
-        document.getElementById('fileName').value = fileDetails.fileName;
+        document.getElementById('fileName2').value = fileDetails.fileName;
 
         // Populate category select
-        const categorySelect = document.getElementById('categorySelect');
+        const categorySelect = document.getElementById('updateCategorySelect2');
         categorySelect.innerHTML = ''; // Clear existing options
 
         // Add default option
@@ -1142,9 +1147,6 @@ const FileActions = {
         defaultOption.value = '';
         defaultOption.textContent = 'Select Category';
         categorySelect.appendChild(defaultOption);
-
-        // Log the categories to help debug
-        console.log('Populating categories:', storedCategories);
 
         // Populate categories
         storedCategories.forEach(category => {
@@ -1161,7 +1163,7 @@ const FileActions = {
         });
 
         // Set public checkbox
-        document.getElementById('isPublic').checked = fileDetails.isPublic;
+        document.getElementById('isPublic2').checked = fileDetails.isPublic;
 
         // Store current file ID for update
         const updateFileBtn = document.getElementById('updateFileBtn');
@@ -1308,6 +1310,7 @@ async function initializePage() {
 
 // Initialization with improved error handling
 // Initialization and setup
+// Initialization and setup
 document.addEventListener('DOMContentLoaded', async () => {
     // Initialize categories on page load
     await FileActions.loadCategories();
@@ -1315,7 +1318,7 @@ document.addEventListener('DOMContentLoaded', async () => {
     const updateModal = document.getElementById('updateFileModal');
     if (updateModal) {
         // Prevent aria-hidden issues
-        updateModal.addEventListener('show.bs.modal', (event) => {
+        updateModal.addEventListener('show.bs.modal', async (event) => {
             // Remove aria-hidden when modal is shown
             updateModal.removeAttribute('aria-hidden');
             // Ensure proper focus management
@@ -1323,6 +1326,18 @@ document.addEventListener('DOMContentLoaded', async () => {
             if (modalCloseBtn) {
                 modalCloseBtn.focus();
             }
+            setupUpdateModal();
+
+            // Fetch categories and populate the dropdown
+            const categories = await FileActions.fetchCategories();
+            const categorySelect = document.getElementById('categorySelect');
+            categorySelect.innerHTML = '<option value="">Select Category</option>';
+            categories.forEach(category => {
+                const option = document.createElement('option');
+                option.value = category.categoryId;
+                option.textContent = category.categoryName;
+                categorySelect.appendChild(option);
+            });
         });
 
         const updateFileBtn = document.getElementById('updateFileBtn');
@@ -1344,6 +1359,75 @@ document.addEventListener('DOMContentLoaded', async () => {
         });
     }
 });
+
+// Function to set up the update modal
+function setupUpdateModal() {
+    const updateModal = document.getElementById('updateFileModal');
+    if (updateModal) {
+        updateModal.addEventListener('show.bs.modal', async (event) => {
+            try {
+                // Remove aria-hidden when modal is shown
+                updateModal.removeAttribute('aria-hidden');
+
+                // Ensure proper focus management
+                const modalCloseBtn = updateModal.querySelector('.btn-close');
+                if (modalCloseBtn) {
+                    modalCloseBtn.focus();
+                }
+
+                // Fetch categories and populate the dropdown
+                const categories = await FileActions.fetchCategories();
+                if (categories && categories.length > 0) {
+                    const categorySelect = document.getElementById('updateCategorySelect2');
+                    categorySelect.innerHTML = '<option value="">Select Category</option>';
+                    categories.forEach(category => {
+                        const option = document.createElement('option');
+                        option.value = category.categoryId;
+                        option.textContent = category.categoryName;
+                        categorySelect.appendChild(option);
+                    });
+                } else {
+                    console.warn('No categories fetched for update modal');
+                    const categorySelect = document.getElementById('updateCategorySelect2');
+                    categorySelect.innerHTML = '<option value="">No categories available</option>';
+                }
+            } catch (error) {
+                console.error('Error fetching categories for update modal:', error);
+                const categorySelect = document.getElementById('updateCategorySelect2');
+                categorySelect.innerHTML = '<option value="">Error fetching categories</option>';
+            }
+        });
+
+        const updateFileBtn = document.getElementById('updateFileBtn');
+        if (updateFileBtn) {
+            updateFileBtn.addEventListener('click', () => {
+                FileActions.updateFile();
+            });
+        }
+
+        updateModal.addEventListener('hidden.bs.modal', (event) => {
+            // Restore aria-hidden when modal is closed
+            updateModal.setAttribute('aria-hidden', 'true');
+
+            // Reset form
+            const form = updateModal.querySelector('form');
+            if (form) {
+                form.reset();
+                form.classList.remove('was-validated');
+            }
+        });
+    }
+}
+
+// Function to show error modal
+function showErrorModal(title, text, footer) {
+    Swal.fire({
+        icon: 'error',
+        title: title,
+        text: text,
+        footer: `Error: ${footer}`
+    });
+}
 function resetFiltersAndSearch() {
     // Reset checkboxes
     const filterAll = document.getElementById('filter-all');
