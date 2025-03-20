@@ -191,19 +191,25 @@ namespace Projects_Management_System_Naseej.Controllers
         }
 
 
-        [HttpPost("update")]
-        public async Task<IActionResult> UpdateFile(IFormFile file)
+        [HttpPut("update/{fileId}")]
+        public async Task<IActionResult> UpdateFile(int fileId, IFormFile file)
         {
             try
             {
                 // Validate file
                 if (file == null || file.Length == 0)
                 {
+                    _logger.LogWarning("File upload failed: No file or empty file");
                     return BadRequest(new { message = "No file uploaded" });
                 }
 
-                // Get current user ID
-                var userId = User.FindFirst(ClaimTypes.NameIdentifier)?.Value;
+                // Find the existing file
+                var existingFile = await _context.Files.FindAsync(fileId);
+                if (existingFile == null)
+                {
+                    _logger.LogWarning("File not found with ID: {FileId}", fileId);
+                    return NotFound($"File with ID {fileId} not found");
+                }
 
                 // Validate file extension
                 var fileExtension = Path.GetExtension(file.FileName).ToLowerInvariant();
@@ -211,6 +217,7 @@ namespace Projects_Management_System_Naseej.Controllers
 
                 if (!allowedExtensions.Contains(fileExtension))
                 {
+                    _logger.LogWarning("Invalid file type: {FileExtension}", fileExtension);
                     return BadRequest(new
                     {
                         message = "Invalid file type",
@@ -218,56 +225,53 @@ namespace Projects_Management_System_Naseej.Controllers
                     });
                 }
 
-                // Generate unique filename
-                var uniqueFileName = $"{Guid.NewGuid()}{fileExtension}";
-                var uploadsFolder = Path.Combine(_environment.WebRootPath, "Files");
+                // Use the existing file path
+                var filePath = existingFile.FilePath;
 
                 // Ensure directory exists
-                Directory.CreateDirectory(uploadsFolder);
+                var directory = Path.GetDirectoryName(filePath);
+                Directory.CreateDirectory(directory);
 
-                var filePath = Path.Combine(uploadsFolder, uniqueFileName);
-
-                // Save file
+                // Save file, overwriting the existing one
                 using (var fileStream = new FileStream(filePath, FileMode.Create))
                 {
                     await file.CopyToAsync(fileStream);
                 }
 
-                // Create file record in database
-                var newFile = new Models.File
-                {
-                    FileName = Path.GetFileNameWithoutExtension(file.FileName),
-                    FileExtension = fileExtension,
-                    FilePath = filePath,
-                    FileSize = file.Length,
-                    UploadDate = DateTime.UtcNow,
-                    UploadedBy = userId != null ? int.Parse(userId) : 0,
-                    IsActive = true,
-                    IsPublic = false
-                };
+                // Verify file was saved
+                var savedFileInfo = new FileInfo(filePath);
+                _logger.LogInformation("Saved File Details:");
+                _logger.LogInformation("Saved File Path: {FilePath}", filePath);
+                _logger.LogInformation("Saved File Size: {FileSize} bytes", savedFileInfo.Length);
 
-                _context.Files.Add(newFile);
+                // Update file record in database
+                existingFile.FileName = Path.GetFileNameWithoutExtension(file.FileName);
+                existingFile.FileExtension = fileExtension;
+                existingFile.FileSize = file.Length;
+                existingFile.LastModifiedDate = DateTime.UtcNow;
+
+                // Save changes
                 await _context.SaveChangesAsync();
 
                 return Ok(new
                 {
                     message = "File updated successfully",
-                    fileId = newFile.FileId,
-                    fileName = newFile.FileName + newFile.FileExtension
+                    fileId = existingFile.FileId,
+                    fileName = existingFile.FileName + existingFile.FileExtension,
+                    savedFileSize = file.Length
                 });
             }
             catch (Exception ex)
             {
-                _logger.LogError(ex, "Error updating file");
+                _logger.LogError(ex, "Comprehensive error updating file with ID {FileId}", fileId);
                 return StatusCode(500, new
                 {
-                    message = "An error occurred while updating the file",
-                    details = ex.Message
+                    message = "A comprehensive error occurred while updating the file",
+                    details = ex.Message,
+                    stackTrace = ex.StackTrace
                 });
             }
         }
-
-
         [HttpGet("excel-view/{fileName}")]
         public async Task<IActionResult> ExcelViewer(string fileName)
         {
@@ -297,7 +301,39 @@ namespace Projects_Management_System_Naseej.Controllers
                 return StatusCode(500, $"An error occurred: {ex.Message}");
             }
         }
+        [HttpDelete("{fileId}")]
+        public async Task<IActionResult> DeleteFile(int fileId)
+        {
+            try
+            {
+                var file = await _context.Files.FindAsync(fileId);
+                if (file == null)
+                {
+                    return NotFound($"File with ID {fileId} not found.");
+                }
 
+                // Remove file from database
+                _context.Files.Remove(file);
+                await _context.SaveChangesAsync();
+
+                // Optionally, delete the physical file
+                if (System.IO.File.Exists(file.FilePath))
+                {
+                    System.IO.File.Delete(file.FilePath);
+                }
+
+                return Ok(new
+                {
+                    message = "File deleted successfully",
+                    fileId = fileId
+                });
+            }
+            catch (Exception ex)
+            {
+                _logger.LogError(ex, $"Error deleting file with ID: {fileId}");
+                return StatusCode(500, "An error occurred while deleting the file.");
+            }
+        }
 
         private async Task ValidateFile(IFormFile file)
         {
@@ -381,7 +417,6 @@ namespace Projects_Management_System_Naseej.Controllers
                 });
             }
         }
-
 
 
 

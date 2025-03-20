@@ -1,3 +1,4 @@
+
 // Utility function for API calls
 async function apiCall(url, method = 'GET', body = null, headers = {}) {
     const token = sessionStorage.getItem('authToken');
@@ -772,7 +773,7 @@ const FileActions = {
                 const blob = await response.blob();
 
                 // Create a modal for Excel viewer
-                this.createExcelViewerModal(blob, fileName);
+                this.createExcelViewerModal(blob, fileName, fileId);
             } else {
                 // For other files, open normally
                 const fileUrl = `https://localhost:44320/api/Files/serve/${encodeURIComponent(fullFileName)}?view=true`;
@@ -955,7 +956,7 @@ const FileActions = {
         return true;
     },
 
-    createExcelViewerModal(blob, fileName) {
+    createExcelViewerModal(blob, fileName, fileId) {
         // Create modal HTML with a container for Handsontable
         const modalHtml = `
     <div class="modal fade" id="excelViewerModal" tabindex="-1">
@@ -977,7 +978,12 @@ const FileActions = {
         </div>
     </div>
     `;
-
+        console.group('Excel Viewer Modal');
+        console.log('File ID:', fileId);
+        console.log('Original Filename:', fileName);
+        console.log('Blob Size:', blob.size);
+        console.log('Blob Type:', blob.type);
+        console.groupEnd();
         // Append modal to body
         if (!document.getElementById('excelViewerModal')) {
             const modalDiv = document.createElement('div');
@@ -1026,16 +1032,13 @@ const FileActions = {
                     manualColumnResize: true,
                     manualRowResize: true,
                     filters: true,
-                    dropdownMenu: true
-                });
-
-                // Sheet selector change event
-                sheetSelector.addEventListener('change', (e) => {
-                    const selectedSheetName = workbook.SheetNames[e.target.value];
-                    const selectedWorksheet = workbook.Sheets[selectedSheetName];
-                    const selectedSheetData = XLSX.utils.sheet_to_json(selectedWorksheet, { header: 1 });
-
-                    hot.loadData(selectedSheetData);
+                    dropdownMenu: true,
+                    // Track changes
+                    afterChange: function (changes, source) {
+                        if (source !== 'loadData') {
+                            this.hasChanges = true;
+                        }
+                    }
                 });
 
                 // Save changes button
@@ -1044,15 +1047,21 @@ const FileActions = {
                         // Get modified data
                         const modifiedData = hot.getData();
 
-                        // Convert back to worksheet
-                        const newWorksheet = XLSX.utils.aoa_to_sheet(modifiedData);
+                        // Log original and modified data for debugging
+                        console.log('Original Workbook:', workbook);
+                        console.log('Modified Data:', modifiedData);
 
-                        // Create a new workbook
-                        const newWorkbook = XLSX.utils.book_new();
-                        XLSX.utils.book_append_sheet(newWorkbook, newWorksheet, 'Sheet1');
+                        // Remove completely empty rows
+                        const cleanedData = modifiedData.filter(row =>
+                            row.some(cell => cell !== null && cell !== undefined && cell !== '')
+                        );
+
+                        // Update the existing worksheet with new data
+                        const newWorksheet = XLSX.utils.aoa_to_sheet(cleanedData);
+                        workbook.Sheets[sheetName] = newWorksheet;
 
                         // Generate workbook as array buffer
-                        const wbout = XLSX.write(newWorkbook, {
+                        const wbout = XLSX.write(workbook, {
                             bookType: 'xlsx',
                             type: 'array'
                         });
@@ -1074,7 +1083,7 @@ const FileActions = {
 
                         // Show loading
                         Swal.fire({
-                            title: 'Uploading Modified File...',
+                            title: 'Updating File...',
                             html: 'Please wait while the file is being updated',
                             allowOutsideClick: false,
                             didOpen: () => {
@@ -1082,9 +1091,9 @@ const FileActions = {
                             }
                         });
 
-                        // Perform file upload
-                        const response = await fetch('https://localhost:44320/api/Files/update', {
-                            method: 'POST',
+                        // Perform file update
+                        const response = await fetch(`https://localhost:44320/api/Files/update/${fileId}`, {
+                            method: 'PUT',
                             headers: {
                                 'Authorization': `Bearer ${sessionStorage.getItem('authToken')}`
                             },
@@ -1095,7 +1104,7 @@ const FileActions = {
                         if (!response.ok) {
                             const errorText = await response.text();
                             console.error('Server Error Response:', errorText);
-                            throw new Error(errorText || 'File upload failed');
+                            throw new Error(errorText || 'File update failed');
                         }
 
                         // Parse response
@@ -1105,17 +1114,11 @@ const FileActions = {
                         Swal.fire({
                             icon: 'success',
                             title: 'File Updated',
-                            text: responseData.message || 'Excel file has been successfully modified and uploaded.'
+                            text: responseData.message || 'Excel file has been successfully modified.'
                         });
 
                         // Refresh files table
                         await this.renderFilesTable();
-
-                        // Close the modal
-                        const excelModal = bootstrap.Modal.getInstance(document.getElementById('excelViewerModal'));
-                        if (excelModal) {
-                            excelModal.hide();
-                        }
 
                     } catch (error) {
                         console.error('Error in save changes:', error);
@@ -1128,12 +1131,7 @@ const FileActions = {
                     }
                 });
 
-                // Hide loading
-                Swal.close();
-
-                // Show modal
-                const excelModal = new bootstrap.Modal(document.getElementById('excelViewerModal'));
-                excelModal.show();
+                // ... (rest of the existing code)
             } catch (error) {
                 console.error('Excel parsing error:', error);
                 Swal.fire({
@@ -1145,16 +1143,7 @@ const FileActions = {
             }
         };
 
-        // Add error handling to FileReader
-        reader.onerror = (error) => {
-            console.error('FileReader error:', error);
-            Swal.fire({
-                icon: 'error',
-                title: 'File Reading Error',
-                text: 'Unable to read the file.',
-                footer: `Error: ${error.message}`
-            });
-        };
+
 
         // Read the blob
         reader.readAsBinaryString(blob);
