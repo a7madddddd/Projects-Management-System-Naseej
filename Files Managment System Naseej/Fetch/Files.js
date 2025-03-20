@@ -952,14 +952,6 @@ const FileActions = {
     },
 
     createExcelViewerModal(blob, fileName, fileId) {
-        // Extensive logging at the start
-        console.group('Excel Viewer Modal Initialization');
-        console.log('File ID:', fileId);
-        console.log('Original Filename:', fileName);
-        console.log('Blob Size:', blob.size);
-        console.log('Blob Type:', blob.type);
-        console.groupEnd();
-
         // Create modal HTML with a container for Handsontable
         const modalHtml = `
     <div class="modal fade" id="excelViewerModal" tabindex="-1">
@@ -990,7 +982,7 @@ const FileActions = {
         }
 
         // Show loading
-        const loadingModal = Swal.fire({
+        Swal.fire({
             title: 'Loading Excel File...',
             html: 'Please wait while the file is being processed',
             allowOutsideClick: false,
@@ -999,63 +991,12 @@ const FileActions = {
             }
         });
 
-        // Create a timeout to handle potential loading issues
-        const loadingTimeout = setTimeout(() => {
-            Swal.fire({
-                icon: 'error',
-                title: 'Loading Timeout',
-                text: 'File loading took too long. Please try again.',
-                footer: 'Possible causes: large file, network issue, file corruption'
-            });
-        }, 30000); // 30 seconds timeout
-
         // Use FileReader to read the blob
         const reader = new FileReader();
-
-        // Error handling for FileReader
-        reader.onerror = (error) => {
-            clearTimeout(loadingTimeout);
-            console.error('FileReader error:', error);
-            Swal.fire({
-                icon: 'error',
-                title: 'File Reading Error',
-                text: 'Unable to read the file. Please try again.',
-                footer: `Error: ${error}`
-            });
-        };
-
         reader.onload = async (e) => {
             try {
-                // Clear the loading timeout
-                clearTimeout(loadingTimeout);
-
-                // Log raw event data
-                console.group('FileReader onload');
-                console.log('Result Type:', typeof e.target.result);
-                console.log('Result Length:', e.target.result.length);
-                console.groupEnd();
-
-                // Attempt to read the workbook with multiple methods
-                let workbook;
-                try {
-                    // Try binary first
-                    workbook = XLSX.read(e.target.result, { type: 'binary' });
-                } catch (binaryError) {
-                    console.warn('Binary read failed, trying array method', binaryError);
-                    try {
-                        // Fallback to array
-                        workbook = XLSX.read(e.target.result, { type: 'array' });
-                    } catch (arrayError) {
-                        console.error('Both binary and array reads failed', arrayError);
-                        throw arrayError;
-                    }
-                }
-
-                // Log workbook details
-                console.group('Workbook Details');
-                console.log('Sheet Names:', workbook.SheetNames);
-                console.log('Sheets:', Object.keys(workbook.Sheets));
-                console.groupEnd();
+                // Parse the file using SheetJS
+                const workbook = XLSX.read(e.target.result, { type: 'binary' });
 
                 // Populate sheet selector
                 const sheetSelector = document.getElementById('sheet-selector');
@@ -1066,20 +1007,7 @@ const FileActions = {
                 // Convert first sheet to array for Handsontable
                 const sheetName = workbook.SheetNames[0];
                 const worksheet = workbook.Sheets[sheetName];
-
-                // Log worksheet details
-                console.group('Worksheet Details');
-                console.log('Sheet Name:', sheetName);
-                console.log('Worksheet Keys:', Object.keys(worksheet));
-                console.groupEnd();
-
                 const sheetData = XLSX.utils.sheet_to_json(worksheet, { header: 1 });
-
-                // Log sheet data
-                console.group('Sheet Data');
-                console.log('Data Length:', sheetData.length);
-                console.log('First Row:', sheetData[0]);
-                console.groupEnd();
 
                 // Initialize Handsontable
                 const container = document.getElementById('excel-container');
@@ -1103,12 +1031,14 @@ const FileActions = {
                     }
                 });
 
-                // Close loading modal
-                Swal.close();
+                // Sheet selector change event
+                sheetSelector.addEventListener('change', (e) => {
+                    const selectedSheetName = workbook.SheetNames[e.target.value];
+                    const selectedWorksheet = workbook.Sheets[selectedSheetName];
+                    const selectedSheetData = XLSX.utils.sheet_to_json(selectedWorksheet, { header: 1 });
 
-                // Show modal
-                const excelModal = new bootstrap.Modal(document.getElementById('excelViewerModal'));
-                excelModal.show();
+                    hot.loadData(selectedSheetData);
+                });
 
                 // Save changes button
                 document.getElementById('save-changes').addEventListener('click', async () => {
@@ -1123,7 +1053,7 @@ const FileActions = {
                             return;
                         }
 
-                        // Get modified data
+                        // Get modified data for the current sheet
                         const modifiedData = hot.getData();
 
                         // Remove completely empty rows
@@ -1131,11 +1061,11 @@ const FileActions = {
                             row.some(cell => cell !== null && cell !== undefined && cell !== '')
                         );
 
-                        // Update the existing worksheet
-                        const newWorksheet = XLSX.utils.aoa_to_sheet(cleanedData);
-                        workbook.Sheets[sheetName] = newWorksheet;
+                        // Update the specific sheet in the workbook
+                        const currentSheetName = workbook.SheetNames[sheetSelector.selectedIndex];
+                        workbook.Sheets[currentSheetName] = XLSX.utils.aoa_to_sheet(cleanedData);
 
-                        // Generate workbook as array buffer
+                        // Generate workbook as array buffer, preserving original workbook structure
                         const wbout = XLSX.write(workbook, {
                             bookType: 'xlsx',
                             type: 'array'
@@ -1146,13 +1076,13 @@ const FileActions = {
                             ? fileName
                             : `${fileName}.xlsx`;
 
-                        // Create a File object
+                        // Create a File object with the correct MIME type and extension
                         const modifiedFile = new File([wbout], fileNameWithExtension, {
                             type: 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet',
                             lastModified: Date.now()
                         });
 
-                        // Prepare FormData
+                        // Prepare FormData for upload
                         const formData = new FormData();
                         formData.append('file', modifiedFile, fileNameWithExtension);
 
@@ -1209,6 +1139,13 @@ const FileActions = {
                     }
                 });
 
+                // Hide loading
+                Swal.close();
+
+                // Show modal
+                const excelModal = new bootstrap.Modal(document.getElementById('excelViewerModal'));
+                excelModal.show();
+
             } catch (error) {
                 console.error('Excel parsing error:', error);
                 Swal.fire({
@@ -1221,17 +1158,7 @@ const FileActions = {
         };
 
         // Read the blob
-        try {
-            reader.readAsBinaryString(blob);
-        } catch (error) {
-            console.error('Error reading blob:', error);
-            Swal.fire({
-                icon: 'error',
-                title: 'Blob Reading Error',
-                text: 'Unable to read file blob.',
-                footer: `Error: ${error.message}`
-            });
-        }
+        reader.readAsBinaryString(blob);
     },
     async uploadModifiedExcel(modifiedFile, originalFileName) {
         try {
