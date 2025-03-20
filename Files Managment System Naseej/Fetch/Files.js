@@ -67,8 +67,16 @@ async function fetchUserDetails(userId) {
 }
 
 async function fetchCategoryDetails(categoryId) {
+    if (categoryId === null) {
+        return null;
+    }
     return cacheManager.get(`category_${categoryId}`, async () => {
-        return await apiCall(`https://localhost:44320/api/FileCategories/${categoryId}`);
+        try {
+            return await apiCall(`https://localhost:44320/api/FileCategories/${categoryId}`);
+        } catch (error) {
+            console.error(`Error fetching category ${categoryId}:`, error);
+            return null;
+        }
     });
 }
 
@@ -80,7 +88,7 @@ async function fetchFiles() {
         const enrichedFiles = await Promise.all(files.map(async (file) => {
             const [userData, categoryData] = await Promise.all([
                 fetchUserDetails(file.uploadedBy),
-                fetchCategoryDetails(file.categoryId)
+                file.categoryId !== null ? fetchCategoryDetails(file.categoryId) : Promise.resolve(null)
             ]);
 
             return {
@@ -754,28 +762,22 @@ const FileActions = {
     // Method to open file in browser
     async openFileInBrowser(fileId, fileName, fileExtension) {
         try {
-            // Fetch file details to get the full file path
             const fileDetails = await apiCall(`https://localhost:44320/api/Files/${fileId}`);
             const fullFileName = fileDetails.fileName + fileDetails.fileExtension;
 
             // Check if it's an Excel file
             if (fileExtension === '.xlsx' || fileExtension === '.xls') {
-                // For Excel files, we'll use a download approach or a special viewer
-                const downloadUrl = `https://localhost:44320/api/Files/serve/${encodeURIComponent(fullFileName)}`;
+                // Fetch the file as a blob
+                const response = await fetch(`https://localhost:44320/api/Files/serve/${encodeURIComponent(fullFileName)}?view=true`);
+                const blob = await response.blob();
 
-                // Option 1: Just download the file
-                // window.location.href = downloadUrl;
-
-                // Option 2: Use Office Online Viewer (if you have a publicly accessible URL)
-                const publicUrl = `https://your-public-domain.com/files/${encodeURIComponent(fullFileName)}`;
-                window.open(`https://view.officeapps.live.com/op/view.aspx?src=${encodeURIComponent(publicUrl)}`, '_blank');
-
-                return;
+                // Create a modal for Excel viewer
+                this.createExcelViewerModal(blob, fileName);
+            } else {
+                // For other files, open normally
+                const fileUrl = `https://localhost:44320/api/Files/serve/${encodeURIComponent(fullFileName)}?view=true`;
+                window.open(fileUrl, '_blank');
             }
-
-            // For other file types, open inline
-            const fileUrl = `https://localhost:44320/api/Files/view/${encodeURIComponent(fullFileName)}`;
-            window.open(fileUrl, '_blank');
         } catch (error) {
             console.error('Open file error:', error);
             Swal.fire({
@@ -952,6 +954,273 @@ const FileActions = {
 
         return true;
     },
+
+    createExcelViewerModal(blob, fileName) {
+        // Create modal HTML with a container for Handsontable
+        const modalHtml = `
+    <div class="modal fade" id="excelViewerModal" tabindex="-1">
+        <div class="modal-dialog modal-fullscreen">
+            <div class="modal-content">
+                <div class="modal-header">
+                    <h5 class="modal-title">Excel Viewer - ${fileName}</h5>
+                    <select id="sheet-selector" class="form-select w-auto ms-3"></select>
+                    <button type="button" class="btn-close" data-bs-dismiss="modal"></button>
+                </div>
+                <div class="modal-body">
+                    <div id="excel-container" style="width:100%; height:70vh;"></div>
+                </div>
+                <div class="modal-footer">
+                    <button id="save-changes" class="btn btn-primary">Save Changes</button>
+                    <button class="btn btn-secondary" data-bs-dismiss="modal">Close</button>
+                </div>
+            </div>
+        </div>
+    </div>
+    `;
+
+        // Append modal to body
+        if (!document.getElementById('excelViewerModal')) {
+            const modalDiv = document.createElement('div');
+            modalDiv.innerHTML = modalHtml;
+            document.body.appendChild(modalDiv);
+        }
+
+        // Show loading
+        Swal.fire({
+            title: 'Loading Excel File...',
+            html: 'Please wait while the file is being processed',
+            allowOutsideClick: false,
+            didOpen: () => {
+                Swal.showLoading();
+            }
+        });
+
+        // Use FileReader to read the blob
+        const reader = new FileReader();
+        reader.onload = async (e) => {
+            try {
+                // Parse the file using SheetJS
+                const workbook = XLSX.read(e.target.result, { type: 'binary' });
+
+                // Populate sheet selector
+                const sheetSelector = document.getElementById('sheet-selector');
+                sheetSelector.innerHTML = workbook.SheetNames.map((name, index) =>
+                    `<option value="${index}">${name}</option>`
+                ).join('');
+
+                // Convert first sheet to array for Handsontable
+                const sheetName = workbook.SheetNames[0];
+                const worksheet = workbook.Sheets[sheetName];
+                const sheetData = XLSX.utils.sheet_to_json(worksheet, { header: 1 });
+
+                // Initialize Handsontable
+                const container = document.getElementById('excel-container');
+                const hot = new Handsontable(container, {
+                    data: sheetData,
+                    rowHeaders: true,
+                    colHeaders: true,
+                    height: '100%',
+                    width: '100%',
+                    licenseKey: 'non-commercial-and-evaluation',
+                    contextMenu: true,
+                    manualColumnResize: true,
+                    manualRowResize: true,
+                    filters: true,
+                    dropdownMenu: true
+                });
+
+                // Sheet selector change event
+                sheetSelector.addEventListener('change', (e) => {
+                    const selectedSheetName = workbook.SheetNames[e.target.value];
+                    const selectedWorksheet = workbook.Sheets[selectedSheetName];
+                    const selectedSheetData = XLSX.utils.sheet_to_json(selectedWorksheet, { header: 1 });
+
+                    hot.loadData(selectedSheetData);
+                });
+
+                // Save changes button
+                document.getElementById('save-changes').addEventListener('click', async () => {
+                    try {
+                        // Get modified data
+                        const modifiedData = hot.getData();
+
+                        // Convert back to worksheet
+                        const newWorksheet = XLSX.utils.aoa_to_sheet(modifiedData);
+
+                        // Create a new workbook
+                        const newWorkbook = XLSX.utils.book_new();
+                        XLSX.utils.book_append_sheet(newWorkbook, newWorksheet, 'Sheet1');
+
+                        // Generate workbook as array buffer
+                        const wbout = XLSX.write(newWorkbook, {
+                            bookType: 'xlsx',
+                            type: 'array'
+                        });
+
+                        // Ensure fileName has .xlsx extension
+                        const fileNameWithExtension = fileName.toLowerCase().endsWith('.xlsx')
+                            ? fileName
+                            : `${fileName}.xlsx`;
+
+                        // Create a File object with the correct MIME type and extension
+                        const modifiedFile = new File([wbout], fileNameWithExtension, {
+                            type: 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet',
+                            lastModified: Date.now()
+                        });
+
+                        // Prepare FormData for upload
+                        const formData = new FormData();
+                        formData.append('file', modifiedFile, fileNameWithExtension);
+
+                        // Show loading
+                        Swal.fire({
+                            title: 'Uploading Modified File...',
+                            html: 'Please wait while the file is being updated',
+                            allowOutsideClick: false,
+                            didOpen: () => {
+                                Swal.showLoading();
+                            }
+                        });
+
+                        // Perform file upload
+                        const response = await fetch('https://localhost:44320/api/Files/update', {
+                            method: 'POST',
+                            headers: {
+                                'Authorization': `Bearer ${sessionStorage.getItem('authToken')}`
+                            },
+                            body: formData
+                        });
+
+                        // Check response
+                        if (!response.ok) {
+                            const errorText = await response.text();
+                            console.error('Server Error Response:', errorText);
+                            throw new Error(errorText || 'File upload failed');
+                        }
+
+                        // Parse response
+                        const responseData = await response.json();
+
+                        // Success notification
+                        Swal.fire({
+                            icon: 'success',
+                            title: 'File Updated',
+                            text: responseData.message || 'Excel file has been successfully modified and uploaded.'
+                        });
+
+                        // Refresh files table
+                        await this.renderFilesTable();
+
+                        // Close the modal
+                        const excelModal = bootstrap.Modal.getInstance(document.getElementById('excelViewerModal'));
+                        if (excelModal) {
+                            excelModal.hide();
+                        }
+
+                    } catch (error) {
+                        console.error('Error in save changes:', error);
+                        Swal.fire({
+                            icon: 'error',
+                            title: 'Save Error',
+                            text: 'Unable to save changes.',
+                            footer: `Error: ${error.message}`
+                        });
+                    }
+                });
+
+                // Hide loading
+                Swal.close();
+
+                // Show modal
+                const excelModal = new bootstrap.Modal(document.getElementById('excelViewerModal'));
+                excelModal.show();
+            } catch (error) {
+                console.error('Excel parsing error:', error);
+                Swal.fire({
+                    icon: 'error',
+                    title: 'Excel Viewer Error',
+                    text: 'Unable to parse Excel file.',
+                    footer: `Error: ${error.message}`
+                });
+            }
+        };
+
+        // Add error handling to FileReader
+        reader.onerror = (error) => {
+            console.error('FileReader error:', error);
+            Swal.fire({
+                icon: 'error',
+                title: 'File Reading Error',
+                text: 'Unable to read the file.',
+                footer: `Error: ${error.message}`
+            });
+        };
+
+        // Read the blob
+        reader.readAsBinaryString(blob);
+    },
+    async uploadModifiedExcel(modifiedFile, originalFileName) {
+        try {
+            // Create FormData
+            const formData = new FormData();
+            formData.append('file', modifiedFile, originalFileName);
+
+            // Show loading
+            Swal.fire({
+                title: 'Uploading Modified File...',
+                html: 'Please wait while the file is being updated',
+                allowOutsideClick: false,
+                didOpen: () => {
+                    Swal.showLoading();
+                }
+            });
+
+            // Perform file upload
+            const response = await fetch('https://localhost:44320/api/Files/update', {
+                method: 'POST',
+                headers: {
+                    'Authorization': `Bearer ${sessionStorage.getItem('authToken')}`
+                },
+                body: formData
+            });
+
+            // Check response
+            if (!response.ok) {
+                const errorText = await response.text();
+                console.error('Server Error Response:', errorText);
+
+                throw new Error(errorText || 'File upload failed');
+            }
+
+            // Parse response
+            const responseData = await response.json();
+
+            // Success notification
+            Swal.fire({
+                icon: 'success',
+                title: 'File Updated',
+                text: responseData.message || 'Excel file has been successfully modified and uploaded.'
+            });
+
+            // Refresh files table
+            await this.renderFilesTable();
+
+            return responseData;
+
+        } catch (error) {
+            console.error('Modified file upload error:', error);
+
+            Swal.fire({
+                icon: 'error',
+                title: 'Upload Failed',
+                text: error.message || 'Unable to upload modified file.',
+                footer: `Error: ${error.message}`
+            });
+
+            throw error;
+        }
+    },
+
 
 
     async updateFile() {
@@ -1277,7 +1546,8 @@ const FileActions = {
                 text: 'Unable to download file.',
                 footer: `Error: ${error.message}`
             });
-        }}
+        }
+    }
 };
 
 

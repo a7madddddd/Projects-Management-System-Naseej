@@ -191,6 +191,113 @@ namespace Projects_Management_System_Naseej.Controllers
         }
 
 
+        [HttpPost("update")]
+        public async Task<IActionResult> UpdateFile(IFormFile file)
+        {
+            try
+            {
+                // Validate file
+                if (file == null || file.Length == 0)
+                {
+                    return BadRequest(new { message = "No file uploaded" });
+                }
+
+                // Get current user ID
+                var userId = User.FindFirst(ClaimTypes.NameIdentifier)?.Value;
+
+                // Validate file extension
+                var fileExtension = Path.GetExtension(file.FileName).ToLowerInvariant();
+                string[] allowedExtensions = { ".xlsx", ".xls" };
+
+                if (!allowedExtensions.Contains(fileExtension))
+                {
+                    return BadRequest(new
+                    {
+                        message = "Invalid file type",
+                        allowedExtensions = allowedExtensions
+                    });
+                }
+
+                // Generate unique filename
+                var uniqueFileName = $"{Guid.NewGuid()}{fileExtension}";
+                var uploadsFolder = Path.Combine(_environment.WebRootPath, "Files");
+
+                // Ensure directory exists
+                Directory.CreateDirectory(uploadsFolder);
+
+                var filePath = Path.Combine(uploadsFolder, uniqueFileName);
+
+                // Save file
+                using (var fileStream = new FileStream(filePath, FileMode.Create))
+                {
+                    await file.CopyToAsync(fileStream);
+                }
+
+                // Create file record in database
+                var newFile = new Models.File
+                {
+                    FileName = Path.GetFileNameWithoutExtension(file.FileName),
+                    FileExtension = fileExtension,
+                    FilePath = filePath,
+                    FileSize = file.Length,
+                    UploadDate = DateTime.UtcNow,
+                    UploadedBy = userId != null ? int.Parse(userId) : 0,
+                    IsActive = true,
+                    IsPublic = false
+                };
+
+                _context.Files.Add(newFile);
+                await _context.SaveChangesAsync();
+
+                return Ok(new
+                {
+                    message = "File updated successfully",
+                    fileId = newFile.FileId,
+                    fileName = newFile.FileName + newFile.FileExtension
+                });
+            }
+            catch (Exception ex)
+            {
+                _logger.LogError(ex, "Error updating file");
+                return StatusCode(500, new
+                {
+                    message = "An error occurred while updating the file",
+                    details = ex.Message
+                });
+            }
+        }
+
+
+        [HttpGet("excel-view/{fileName}")]
+        public async Task<IActionResult> ExcelViewer(string fileName)
+        {
+            try
+            {
+                // Find the file in the database
+                var file = await _context.Files
+                    .FirstOrDefaultAsync(f => f.FileName + f.FileExtension == fileName);
+
+                if (file == null)
+                {
+                    return NotFound($"File {fileName} not found in database.");
+                }
+
+                // Create a public file URL - this needs to be accessible from the internet
+                var publicFileUrl = $"https://your-actual-public-domain.com/api/Files/serve/{Uri.EscapeDataString(fileName)}?view=true";
+
+                // Create an Office Online viewer URL
+                var viewerUrl = $"https://view.officeapps.live.com/op/view.aspx?src={Uri.EscapeDataString(publicFileUrl)}";
+
+                // Redirect to the Office Online viewer
+                return Redirect(viewerUrl);
+            }
+            catch (Exception ex)
+            {
+                _logger.LogError(ex, $"Error creating Excel viewer URL: {fileName}");
+                return StatusCode(500, $"An error occurred: {ex.Message}");
+            }
+        }
+
 
         private async Task ValidateFile(IFormFile file)
         {

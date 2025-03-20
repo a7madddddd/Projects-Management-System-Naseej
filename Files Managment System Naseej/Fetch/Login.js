@@ -56,3 +56,6 @@ function checkAuthentication() {
 
 // Call this function on pages that require authentication
 document.addEventListener('DOMContentLoaded', checkAuthentication);
+
+
+
