@@ -366,3 +366,6 @@ FodyWeavers.xsd
 /Projects Management System Naseej/appsettings.json
 /Projects Management System Naseej/credentials.json
 /Projects Management System Naseej/Services/UserRepositoryExtensions.cs
+/Projects Management System Naseej/appsettings.Development.json
+/Projects Management System Naseej/Controllers/AccountController.cs
+/Projects Management System Naseej/Controllers/FilesController.cs
