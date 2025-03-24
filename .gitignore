@@ -361,3 +361,8 @@ MigrationBackup/
 
 # Fody - auto-generated XML schema
 FodyWeavers.xsd
+/Projects Management System Naseej/GoogleDriveTokens/Google.Apis.Auth.OAuth2.Responses.TokenResponse-user
+/Projects Management System Naseej/Services/GoogleDriveService.cs
+/Projects Management System Naseej/appsettings.json
+/Projects Management System Naseej/credentials.json
+/Projects Management System Naseej/Services/UserRepositoryExtensions.cs
