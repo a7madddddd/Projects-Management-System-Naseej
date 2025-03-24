@@ -14,5 +14,8 @@
         public DateTime? LastModifiedDate { get; set; }
         public bool IsActive { get; set; }
         public bool IsPublic { get; set; }
+        public string? GoogleDriveFileId { get; set; }
+
+        public bool? IsSyncedWithGoogleDrive { get; set; }
     }
 }

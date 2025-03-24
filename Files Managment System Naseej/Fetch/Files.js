@@ -756,34 +756,200 @@ const FileActions = {
     },
 
     // Method to open file in browser
+    // Method to open file in browser
     async openFileInBrowser(fileId, fileName, fileExtension) {
         try {
-            const fileDetails = await apiCall(`https://localhost:44320/api/Files/${fileId}`);
-            const fullFileName = fileDetails.fileName + fileDetails.fileExtension;
+            // Fetch file details
+            const response = await fetch(`https://localhost:44320/api/Files/open-online/${fileId}`);
+            const data = await response.json();
 
-            // Check if it's an Excel file
-            if (fileExtension === '.xlsx' || fileExtension === '.xls') {
-                // Fetch the file as a blob
-                const response = await fetch(`https://localhost:44320/api/Files/serve/${encodeURIComponent(fullFileName)}?view=true`);
-                const blob = await response.blob();
+            // If successful, handle viewing only (no download options)
+            if (data.success) {
+                // Determine viewing method based on file type
+                const lowerExtension = data.fileType.toLowerCase();
 
-                // Create a modal for Excel viewer
-                this.createExcelViewerModal(blob, fileName, fileId);
+                // Handle different file types with viewing-only approaches
+                switch (lowerExtension) {
+                    case '.pdf':
+                        // For PDFs - use PDF viewer without download option
+                        this.handlePdfFile(data.originalFileUrl, fileName);
+                        break;
+
+                    case '.xlsx':
+                    case '.xls':
+                        // For Excel files - redirect to Office Online Viewer
+                        if (data.viewerUrls && data.viewerUrls.length > 0) {
+                            const officeOnlineUrl = data.viewerUrls.find(url => url.includes('view.officeapps.live.com'));
+                            if (officeOnlineUrl) {
+                                window.open(officeOnlineUrl, '_blank');
+                            } else {
+                                this.handleDisabledFile("Excel");
+                            }
+                        } else {
+                            this.handleDisabledFile("Excel");
+                        }
+                        break;
+
+                    case '.docx':
+                    case '.doc':
+                    case '.pptx':
+                    case '.ppt':
+                        // Try to open in Google Docs viewer if available
+                        if (data.viewerUrls && data.viewerUrls.length > 0) {
+                            const googleViewerUrl = data.viewerUrls.find(url => url.includes('docs.google.com/viewer'));
+                            if (googleViewerUrl) {
+                                window.open(googleViewerUrl, '_blank');
+                            } else {
+                                // Show message that viewing-only is supported
+                                this.handleDisabledFile(lowerExtension.substring(1).toUpperCase());
+                            }
+                        } else {
+                            this.handleDisabledFile(lowerExtension.substring(1).toUpperCase());
+                        }
+                        break;
+
+                    default:
+                        // For all other files - show unsupported message
+                        Swal.fire({
+                            icon: 'warning',
+                            title: 'Viewing Not Available',
+                            text: 'This file type cannot be viewed in the browser.',
+                            confirmButtonText: 'OK'
+                        });
+                }
             } else {
-                // For other files, open normally
-                const fileUrl = `https://localhost:44320/api/Files/serve/${encodeURIComponent(fullFileName)}?view=true`;
-                window.open(fileUrl, '_blank');
+                // Handle unsupported file type
+                Swal.fire({
+                    icon: 'warning',
+                    title: 'Unsupported File Type',
+                    text: data.message || 'This file type cannot be viewed online.',
+                    confirmButtonText: 'OK'
+                });
             }
         } catch (error) {
             console.error('Open file error:', error);
             Swal.fire({
                 icon: 'error',
-                title: 'Open File Failed',
+                title: 'File Viewing Failed',
                 text: 'Unable to open file in browser.',
-                footer: `Error: ${error.message}`
+                footer: `Error: ${error.message}`,
+                confirmButtonText: 'OK'
             });
         }
     },
+
+    // Specialized handler for PDF files
+    handlePdfFile(fileUrl, fileName) {
+        // Check if we have a local PDF viewer
+        const hasLocalPdfViewer = typeof window.pdfViewerAvailable === 'function' ?
+            window.pdfViewerAvailable() :
+            false;
+
+        if (hasLocalPdfViewer) {
+            // Use local PDF.js viewer if available
+            const localViewerUrl = `/pdf-viewer?file=${encodeURIComponent(fileUrl)}`;
+            window.open(localViewerUrl, '_blank');
+        } else {
+            // Open in browser's built-in viewer (view-only mode)
+            Swal.fire({
+                icon: 'info',
+                title: 'Opening PDF',
+                text: 'The PDF file will open in view-only mode.',
+                timer: 2000,
+                showConfirmButton: false
+            });
+
+            setTimeout(() => {
+                // Open in a new window with specific params to discourage saving
+                const newWindow = window.open('', '_blank');
+                if (newWindow) {
+                    newWindow.document.write(`
+                    <html>
+                        <head>
+                            <title>View Only: ${fileName || 'Document'}</title>
+                            <style>
+                                body, html { margin: 0; padding: 0; height: 100%; overflow: hidden; }
+                                iframe { width: 100%; height: 100%; border: none; }
+                            </style>
+                            <script>
+                                // Disable context menu and keyboard shortcuts
+                                document.addEventListener('contextmenu', e => e.preventDefault());
+                                document.addEventListener('keydown', e => {
+                                    // Prevent Ctrl+S, Ctrl+P, etc.
+                                    if (e.ctrlKey && (e.key === 's' || e.key === 'p')) {
+                                        e.preventDefault();
+                                    }
+                                });
+                            </script>
+                        </head>
+                        <body>
+                            <iframe src="${fileUrl}" allowfullscreen></iframe>
+                        </body>
+                    </html>
+                `);
+                    newWindow.document.close();
+                } else {
+                    // Fallback if popup blocked
+                    window.open(fileUrl, '_blank');
+                }
+            }, 2000);
+        }
+    },
+
+    handleDisabledFile(fileType) {
+        Swal.fire({
+            icon: 'info',
+            title: `${fileType} File`,
+            text: `Online viewing for ${fileType} files is not available. Downloads have been disabled by administrator.`,
+            confirmButtonText: 'OK'
+        });
+    },
+    // Specialized handler for Excel files
+
+
+    // Specialized handler for Office files
+
+
+    // Helper method to try multiple viewer URLs with improved reliability
+    async tryViewerUrls(urls) {
+        for (const url of urls) {
+            try {
+                // Skip Microsoft Office Online viewer URLs as they're unreliable
+                if (url.includes('view.officeapps.live.com')) {
+                    console.warn('Skipping unreliable Office Online viewer:', url);
+                    continue;
+                }
+
+                // Use HEAD request to check URL accessibility
+                const response = await fetch(url, {
+                    method: 'HEAD',
+                    mode: 'no-cors',
+                    timeout: 5000 // 5-second timeout
+                });
+
+                // If no error is thrown, return the URL
+                return url;
+            } catch (error) {
+                console.warn(`Viewer URL failed: ${url}`, error);
+            }
+        }
+        return null;
+    },
+
+// Fallback download method
+      async downloadFile(fileId, fileName) {
+                const downloadUrl = `https://localhost:44320/api/Files/download/${fileId}`;
+
+                // Create temporary anchor for download
+                const link = document.createElement('a');
+                link.href = downloadUrl;
+                link.download = fileName;
+                document.body.appendChild(link);
+                link.click();
+                document.body.removeChild(link);
+    },
+
+
 
 
 

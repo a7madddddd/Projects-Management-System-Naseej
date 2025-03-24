@@ -14,5 +14,7 @@ namespace Projects_Management_System_Naseej.Repositories
         Task AssignRoleToUserAsync(int userId, int roleId, int assignedBy);
         Task RemoveRoleFromUserAsync(int userId, int roleId);
         Task<UserDTO> GetUserByUsernameOrEmailAsync(string usernameOrEmail);
+        Task<bool> UpdateUserRoleAsync(int userId, int oldRoleId, int newRoleId);
+        Task<User> GetOrCreateUserFromGoogleAsync(string email, string name);
     }
 }

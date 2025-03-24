@@ -126,13 +126,25 @@ namespace Projects_Management_System_Naseej.Implementations
 
         public async Task DeleteUserAsync(int userId)
         {
-            var user = await _context.Users.FindAsync(userId);
-            if (user != null)
+            var user = await _context.Users
+                .Include(u => u.UserRoleUsers) // تضمين الأدوار المرتبطة
+                .FirstOrDefaultAsync(u => u.UserId == userId);
+
+            if (user == null)
             {
-                _context.Users.Remove(user);
-                await _context.SaveChangesAsync();
+                throw new KeyNotFoundException("User not found.");
             }
+
+            // حذف جميع الأدوار المرتبطة بالمستخدم أولاً
+            _context.UserRoles.RemoveRange(user.UserRoleUsers);
+
+            // حذف المستخدم نفسه
+            _context.Users.Remove(user);
+
+            await _context.SaveChangesAsync();
         }
+
+
 
         public async Task<IEnumerable<string>> GetUserRolesAsync(int userId)
         {
@@ -155,14 +167,67 @@ namespace Projects_Management_System_Naseej.Implementations
             await _context.SaveChangesAsync();
         }
 
+        public async Task<bool> UpdateUserRoleAsync(int userId, int oldRoleId, int newRoleId)
+        {
+            try
+            {
+                var userRole = await _context.UserRoles
+                    .FirstOrDefaultAsync(ur => ur.UserId == userId && ur.RoleId == oldRoleId);
+
+                if (userRole == null)
+                {
+                    return false;
+                }
+
+                userRole.RoleId = newRoleId;
+
+                await _context.SaveChangesAsync();
+                return true; 
+            }
+            catch (Exception ex)
+            {
+                throw;
+            }
+        }
+
+
         public async Task RemoveRoleFromUserAsync(int userId, int roleId)
         {
-            var userRole = await _context.UserRoles
-                .FirstOrDefaultAsync(ur => ur.UserId == userId && ur.RoleId == roleId);
-            if (userRole != null)
+            try
             {
+                // العثور على العلاقة بين المستخدم والدور
+                var userRole = await _context.UserRoles
+                    .FirstOrDefaultAsync(ur => ur.UserId == userId && ur.RoleId == roleId);
+
+                if (userRole == null)
+                {
+                    return;
+                }
+
+                var viewerRole = await _context.Roles
+                    .FirstOrDefaultAsync(r => r.RoleName == "Viewer");
+
+                if (viewerRole == null)
+                {
+                    throw new Exception("Viewer role not found");
+                }
+
+                // حذف الدور الحالي
                 _context.UserRoles.Remove(userRole);
+
+                // إضافة دور Viewer
+                var newUserRole = new UserRole
+                {
+                    UserId = userId,
+                    RoleId = viewerRole.RoleId
+                };
+                _context.UserRoles.Add(newUserRole);
+
                 await _context.SaveChangesAsync();
+            }
+            catch (Exception ex)
+            {
+                throw;
             }
         }
 
@@ -199,6 +264,112 @@ namespace Projects_Management_System_Naseej.Implementations
                 return BitConverter.ToString(hashedBytes).Replace("-", "").ToLower();
             }
         }
+
+
+
+        public async Task<User> GetOrCreateUserFromGoogleAsync(string email, string name)
+        {
+            if (string.IsNullOrEmpty(email))
+            {
+                throw new ArgumentException("Email cannot be null or empty", nameof(email));
+            }
+
+            try
+            {
+                // Try to find existing user by email
+                var existingUser = await _context.Users
+                    .FirstOrDefaultAsync(u => u.Email == email);
+
+                if (existingUser != null)
+                {
+                    return existingUser;
+                }
+
+                // Generate a unique username
+                string username = GenerateUniqueUsername(name, email);
+
+                // Create a new user
+                var newUser = new User
+                {
+                    Username = username,
+                    Email = email,
+                    PasswordHash = GenerateRandomPassword()
+                };
+
+                // Add default role if needed
+                await AddDefaultRoleToUser(newUser);
+
+                _context.Users.Add(newUser);
+                await _context.SaveChangesAsync();
+
+
+                return newUser;
+            }
+            catch (Exception ex)
+            {
+                throw;
+            }
+        }
+
+        private string GenerateUniqueUsername(string name, string email)
+        {
+            // Remove spaces and convert to lowercase
+            string baseUsername = string.IsNullOrEmpty(name)
+                ? email.Split('@')[0].ToLower()
+                : name.Replace(" ", "").ToLower();
+
+            string username = baseUsername;
+            int counter = 1;
+
+            // Ensure username is unique
+            while (_context.Users.Any(u => u.Username == username))
+            {
+                username = $"{baseUsername}{counter}";
+                counter++;
+            }
+
+            return username;
+        }
+
+        private string GenerateRandomPassword()
+        {
+            // Generate a secure random password
+            using (var rng = new RNGCryptoServiceProvider())
+            {
+                byte[] tokenData = new byte[32];
+                rng.GetBytes(tokenData);
+                return Convert.ToBase64String(tokenData);
+            }
+        }
+
+        private async Task AddDefaultRoleToUser(User user)
+        {
+            try
+            {
+                // Find the default role (e.g., "Viewer")
+                var defaultRole = await _context.Roles
+                    .FirstOrDefaultAsync(r => r.RoleName.ToLower() == "viewer");
+
+                if (defaultRole != null)
+                {
+                    // Create a user role entry
+                    var userRole = new UserRole
+                    {
+                        UserId = user.UserId,
+                        RoleId = defaultRole.RoleId
+                    };
+
+                    _context.UserRoles.Add(userRole);
+                }
+                else
+                {
+                }
+            }
+            catch (Exception ex)
+            {
+            }
+        }
+
 
     }
 }

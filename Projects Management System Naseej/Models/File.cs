@@ -29,6 +29,10 @@ public partial class File
 
     public bool? IsPublic { get; set; }
 
+    public string? GoogleDriveFileId { get; set; }
+
+    public bool? IsSyncedWithGoogleDrive { get; set; }
+
     public virtual ICollection<AuditLog> AuditLogs { get; set; } = new List<AuditLog>();
 
     public virtual FileCategory? Category { get; set; }

@@ -17,6 +17,7 @@ public class TokenService
         var tokenHandler = new JwtSecurityTokenHandler();
         var key = Encoding.ASCII.GetBytes(_secretKey);
 
+
         try
         {
             tokenHandler.ValidateToken(token, new TokenValidationParameters
@@ -30,8 +31,9 @@ public class TokenService
                 // Set this to true if you want to validate the lifetime of the token
                 ValidateLifetime = true,
                 // Set this to the maximum allowable clock skew - five minutes is a common value
-                ClockSkew = TimeSpan.FromMinutes(5)
-            }, out SecurityToken validatedToken);
+                ClockSkew = TimeSpan.FromHours(8)
+            },
+            out SecurityToken validatedToken);
 
             var jwtToken = (JwtSecurityToken)validatedToken;
             return new ClaimsPrincipal(new ClaimsIdentity(jwtToken.Claims));

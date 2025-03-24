@@ -9,6 +9,8 @@ function loginUser() {
     // Fetch options
     const fetchOptions = {
         method: 'POST',
+        credentials: 'include', 
+
         headers: {
             'accept': '*/*',
             'Content-Type': 'application/json'

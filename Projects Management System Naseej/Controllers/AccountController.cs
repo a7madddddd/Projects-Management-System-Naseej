@@ -1,4 +1,7 @@
-﻿using Microsoft.AspNetCore.Authorization;
+﻿using Microsoft.AspNetCore.Authentication.Cookies;
+using Microsoft.AspNetCore.Authentication.Google;
+using Microsoft.AspNetCore.Authentication;
+using Microsoft.AspNetCore.Authorization;
 using Microsoft.AspNetCore.Http;
 using Microsoft.AspNetCore.Mvc;
 using Microsoft.Extensions.Configuration;
@@ -8,6 +11,10 @@ using System.IdentityModel.Tokens.Jwt;
 using System.Security.Claims;
 using System.Security.Cryptography;
 using System.Text;
+using static Projects_Management_System_Naseej.Controllers.FilesController;
+using Microsoft.AspNetCore.Diagnostics;
+using Projects_Management_System_Naseej.Models;
+using Projects_Management_System_Naseej.Services;
 
 namespace Projects_Management_System_Naseej.Controllers
 {
@@ -18,12 +25,15 @@ namespace Projects_Management_System_Naseej.Controllers
         private readonly IUserRepository _userRepository;
         private readonly IRoleRepository _roleRepository;
         private readonly IConfiguration _configuration;
-
-        public AccountController(IUserRepository userRepository, IRoleRepository roleRepository, IConfiguration configuration)
+        private readonly ILogger<AccountController> _logger;
+        private readonly MyDbContext _context;
+        public AccountController(IUserRepository userRepository, IRoleRepository roleRepository, IConfiguration configuration , ILogger<AccountController> logger, MyDbContext context)
         {
             _userRepository = userRepository;
             _roleRepository = roleRepository;
             _configuration = configuration;
+            _logger = logger;
+            _context = context;
         }
 
         [HttpPost("login")]
@@ -104,7 +114,139 @@ namespace Projects_Management_System_Naseej.Controllers
         }
 
 
+        [HttpGet("login")]
+        public IActionResult GoogleLogin()
+        {
+            var properties = new AuthenticationProperties
+            {
+                // Use absolute URL for RedirectUri
+                RedirectUri = Url.Action("GoogleCallback", "Account", null, Request.Scheme, Request.Host.ToString())
+            };
 
+            // Optional: Add specific parameters
+            properties.Items["prompt"] = "select_account"; // Force account selection
+
+            return Challenge(properties, GoogleDefaults.AuthenticationScheme);
+        }
+
+        private string GenerateCodeVerifier()
+        {
+            var randomBytes = new byte[32];
+            using (var rng = new RNGCryptoServiceProvider())
+            {
+                rng.GetBytes(randomBytes);
+            }
+            return Convert.ToBase64String(randomBytes)
+                .TrimEnd('=')
+                .Replace('+', '-')
+                .Replace('/', '_');
+        }
+
+        private string GenerateCodeChallenge(string codeVerifier)
+        {
+            using (var sha256 = SHA256.Create())
+            {
+                var challengeBytes = sha256.ComputeHash(Encoding.UTF8.GetBytes(codeVerifier));
+                return Convert.ToBase64String(challengeBytes)
+                    .TrimEnd('=')
+                    .Replace('+', '-')
+                    .Replace('/', '_');
+            }
+        }
+
+
+
+
+        [HttpGet("login-callback")]
+        public async Task<IActionResult> GoogleCallback()
+        {
+            try
+            {
+                var authResult = await HttpContext.AuthenticateAsync(GoogleDefaults.AuthenticationScheme);
+
+                if (!authResult.Succeeded)
+                {
+                    _logger.LogError("Google authentication failed");
+                    return Unauthorized("Authentication failed");
+                }
+
+                var claims = authResult.Principal.Identities.First().Claims;
+                var email = claims.FirstOrDefault(c => c.Type == ClaimTypes.Email)?.Value;
+                var name = claims.FirstOrDefault(c => c.Type == ClaimTypes.Name)?.Value;
+
+                // Use the extension method with both _userRepository and _context
+                var user = await _userRepository.GetOrCreateGoogleUserAsync(_context, email, name);
+
+                // Generate your internal JWT token
+                var token = GenerateJwtToken(user);
+
+                return Ok(new
+                {
+                    token,
+                    email,
+                    name,
+                    userId = user.UserId,
+                    message = "Authentication successful"
+                });
+            }
+            catch (Exception ex)
+            {
+                _logger.LogError($"Callback error: {ex.Message}");
+                return StatusCode(500, "Internal server error");
+            }
+        }
+
+        // Your existing GenerateJwtToken method...
+        private string GenerateJwtToken(User user)
+        {
+            var claims = new List<Claim>
+        {
+            new Claim(ClaimTypes.NameIdentifier, user.UserId.ToString()),
+            new Claim(ClaimTypes.Email, user.Email),
+            new Claim(ClaimTypes.Name, user.Username)
+        };
+
+            // Add user roles if needed
+            var userRoles = _userRepository.GetUserRolesAsync(user.UserId).Result;
+            foreach (var role in userRoles)
+            {
+                claims.Add(new Claim(ClaimTypes.Role, role));
+            }
+
+            var key = new SymmetricSecurityKey(Encoding.UTF8.GetBytes(_configuration["Jwt:Key"]));
+            var creds = new SigningCredentials(key, SecurityAlgorithms.HmacSha256);
+
+            var token = new JwtSecurityToken(
+                issuer: _configuration["Jwt:Issuer"],
+                audience: _configuration["Jwt:Audience"],
+                claims: claims,
+                expires: DateTime.Now.AddHours(8),
+                signingCredentials: creds);
+
+            return new JwtSecurityTokenHandler().WriteToken(token);
+        }
+
+
+
+
+
+        [HttpGet("check-google-config")]
+        public IActionResult CheckGoogleConfig()
+        {
+            return Ok(new
+            {
+                ClientId = _configuration["Google:ClientId"],
+                ClientSecret = _configuration["Google:ClientSecret"] != null ? "**HIDDEN**" : "NOT SET",
+                CallbackPath = "/api/Account/login-callback",
+                CurrentScheme = Request.Scheme,
+                CurrentHost = Request.Host.ToString(),
+                RedirectUris = new[]
+                {
+            "https://localhost:44320/api/Account/login-callback",
+            "http://localhost:44320/api/Account/login-callback"
+        }
+            });
+        }
 
 
         private string HashPassword(string password)

@@ -52,7 +52,6 @@ namespace Projects_Management_System_Naseej.Controllers
         }
 
         [HttpPost]
-        [Authorize(Policy = "SuperAdmin")]
         public async Task<ActionResult<UserDTO>> CreateUser(CreateUser userDTO)
         {
             try
@@ -104,12 +103,16 @@ namespace Projects_Management_System_Naseej.Controllers
                 await _userRepository.DeleteUserAsync(userId);
                 return NoContent();
             }
+            catch (KeyNotFoundException)
+            {
+                return NotFound("User not found.");
+            }
             catch (Exception ex)
             {
-                // Log the exception
                 return StatusCode(500, "An error occurred while deleting the user.");
             }
         }
+
 
         [HttpGet("{userId}/roles")]
         public async Task<ActionResult<IEnumerable<string>>> GetUserRoles(int userId)
@@ -144,19 +147,45 @@ namespace Projects_Management_System_Naseej.Controllers
             }
         }
 
+        [HttpPut("{userId}/roles")]
+        public async Task<IActionResult> UpdateUserRole(int userId, [FromBody] UpdateUserRoleDto model)
+        {
+            try
+            {
+                bool isUpdated = await _userRepository.UpdateUserRoleAsync(userId, model.OldRoleId, model.NewRoleId);
+
+                if (!isUpdated)
+                {
+                    return NotFound($"Old role {model.OldRoleId} not found for user {userId}");
+                }
+
+                return Ok(new
+                {
+                    Message = "User role updated successfully",
+                    UserId = userId,
+                    NewRoleId = model.NewRoleId
+                });
+            }
+            catch (Exception ex)
+            {
+                return StatusCode(500, "An error occurred while updating the user role.");
+            }
+        }
+
+
         [HttpDelete("{userId}/roles/{roleId}")]
         public async Task<IActionResult> RemoveRoleFromUser(int userId, int roleId)
         {
             try
             {
                 await _userRepository.RemoveRoleFromUserAsync(userId, roleId);
-                return NoContent();
+                return Ok(new { Message = "Role removed and replaced with Viewer role" });
             }
             catch (Exception ex)
             {
-                // Log the exception
                 return StatusCode(500, "An error occurred while removing the role from the user.");
             }
         }
+
     }
 }

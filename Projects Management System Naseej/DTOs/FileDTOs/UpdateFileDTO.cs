@@ -6,5 +6,7 @@
         public string FileName { get; set; }
         public int? CategoryId { get; set; }
         public bool? IsPublic { get; set; }
+        public string? GoogleDriveFileId { get; set; }
+
     }
 }
