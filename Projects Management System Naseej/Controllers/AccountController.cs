@@ -242,8 +242,8 @@ namespace Projects_Management_System_Naseej.Controllers
                 CurrentHost = Request.Host.ToString(),
                 RedirectUris = new[]
                 {
-            "https://localhost:44320/api/Account/login-callback",
-            "http://localhost:44320/api/Account/login-callback"
+            "",
+            ""
         }
             });
         }
