@@ -23,6 +23,9 @@
          <link href="assets/css/icons.min.css" rel="stylesheet" type="text/css" />
          <link href="assets/css/app.min.css" rel="stylesheet" type="text/css" />
 
+
+        <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/sweetalert2@11/dist/sweetalert2.min.css">
+
     </head>
 
     
@@ -894,17 +897,13 @@
                         <div class="col-12">
                             <div class="clearfix">
                                 <div class="btn-group float-end ms-2">
-                                    <button type="button" class="btn btn-secondary me-0 overflow-hidden">
-                                      Upload File
-                                      <input type="file" name="file" class="overflow-hidden position-absolute top-0 start-0 opacity-0"/>
+                                    <button type="button" class="btn btn-secondary me-0 overflow-hidden" id="uploadFileButton">
+                                        Upload File
+                                        <input type="file" name="file" id="fileUploadInput" style="display:none;" multiple
+                                            class="overflow-hidden position-absolute top-0 start-0 opacity-0" />
                                     </button>
-                                    <button type="button" class="btn btn-secondary dropdown-toggle dropdown-toggle-split" data-bs-toggle="dropdown" aria-expanded="false">
-                                        <i class="las la-angle-down"></i>
-                                    </button>
-                                    <div class="dropdown-menu dropdown-menu-end">
-                                        <a class="dropdown-item" href="#"><i class="las la-file-upload fs-16 me-1 align-text-bottom"></i> Upload File</a>
-                                        <a class="dropdown-item" href="#"><i class="las la-cloud-upload-alt fs-16 me-1 align-text-bottom"></i>Upload Folder</a>
-                                    </div>
+                                  
+                                 
                                 </div>
                                 <ul class="nav nav-tabs my-4" role="tablist">
                                     <li class="nav-item">
@@ -943,160 +942,28 @@
                                                             <th class="border-top-0 text-end">Action</th>
                                                         </tr><!--end tr-->
                                                     </thead>
-                                                    <tbody>
-                                                        <tr>                                                        
-                                                            <td>
-                                                                <div class="d-inline-flex justify-content-center align-items-center thumb-md bg-blue-subtle rounded mx-auto me-1">
-                                                                    <i class="fa-solid fa-file-pdf fs-18 align-self-center mb-0 text-blue"></i>
-                                                                </div>
-                                                                <a href="#" class="text-body">payment.pdf</a>
-                                                            </td>
-                                                            <td class="text-end">18 Jul 2024</td>                                   
-                                                            <td class="text-end"> 2.3 MB</td>
-                                                            <td class="text-end">
-                                                                <div class="img-group d-flex justify-content-end">
-                                                                    <a class="user-avatar position-relative d-inline-block" href="#">
-                                                                        <img src="assets/images/users/avatar-2.jpg" alt="avatar" class="thumb-md shadow-sm rounded-circle">
-                                                                    </a>
-                                                                    <a class="user-avatar position-relative d-inline-block ms-n2" href="#">
-                                                                        <img src="assets/images/users/avatar-5.jpg" alt="avatar" class="thumb-md shadow-sm rounded-circle">
-                                                                    </a>
-                                                                    <a class="user-avatar position-relative d-inline-block ms-n2" href="#">
-                                                                        <img src="assets/images/users/avatar-3.jpg" alt="avatar" class="thumb-md shadow-sm rounded-circle">
-                                                                    </a>                 
-                                                                </div>
-                                                            </td>
-                                                            <td class="text-end">   
-                                                                <a href="#"><i class="las la-download text-secondary fs-18"></i></a>                                                    
-                                                                <a href="#"><i class="las la-pen text-secondary fs-18"></i></a>
-                                                                <a href="#"><i class="las la-trash-alt text-secondary fs-18"></i></a>
-                                                            </td>
-                                                        </tr><!--end tr-->  
-                                                        <tr>                                                        
-                                                            <td>
-                                                                <div class="d-inline-flex justify-content-center align-items-center thumb-md bg-blue-subtle rounded mx-auto me-1">
-                                                                    <i class="fa-solid fa-file-pdf fs-18 align-self-center mb-0 text-blue"></i>
-                                                                </div>
-                                                                <a href="#" class="text-body">statement.pdf</a>
-                                                            </td>
-                                                            <td class="text-end">08 Dec 2024</td>                                   
-                                                            <td class="text-end"> 3.7 MB</td>
-                                                            <td class="text-end">
-                                                                <div class="img-group d-flex justify-content-end">
-                                                                    <a class="user-avatar position-relative d-inline-block" href="#">
-                                                                        <img src="assets/images/users/avatar-3.jpg" alt="avatar" class="thumb-md shadow-sm rounded-circle">
-                                                                    </a>
-                                                                    <a class="user-avatar position-relative d-inline-block ms-n2" href="#">
-                                                                        <img src="assets/images/users/avatar-10.jpg" alt="avatar" class="thumb-md shadow-sm rounded-circle">
-                                                                    </a>                 
-                                                                </div>
-                                                            </td>
-                                                            <td class="text-end">   
-                                                                <a href="#"><i class="las la-download text-secondary fs-18"></i></a>                                                    
-                                                                <a href="#"><i class="las la-pen text-secondary fs-18"></i></a>
-                                                                <a href="#"><i class="las la-trash-alt text-secondary fs-18"></i></a>
-                                                            </td>
-                                                        </tr><!--end tr-->  
-                                                        <tr>                                                        
-                                                            <td>
-                                                                <div class="d-inline-flex justify-content-center align-items-center thumb-md bg-blue-subtle rounded mx-auto me-1">
-                                                                    <i class="fa-solid fa-file-pdf fs-18 align-self-center mb-0 text-blue"></i>
-                                                                </div>
-                                                                <a href="#" class="text-body">idcard.pdf</a>
-                                                            </td>
-                                                            <td class="text-end">30 Nov 2024</td>                                   
-                                                            <td class="text-end"> 1.5 MB</td>
-                                                            <td class="text-end">
-                                                                <div class="img-group d-flex justify-content-end">
-                                                                    <a class="user-avatar position-relative d-inline-block" href="#">
-                                                                        <img src="assets/images/users/avatar-7.jpg" alt="avatar" class="thumb-md shadow-sm rounded-circle">
-                                                                    </a>
-                                                                    <a class="user-avatar position-relative d-inline-block ms-n2" href="#">
-                                                                        <img src="assets/images/users/avatar-2.jpg" alt="avatar" class="thumb-md shadow-sm rounded-circle">
-                                                                    </a>                  
-                                                                </div>
-                                                            </td>
-                                                            <td class="text-end">   
-                                                                <a href="#"><i class="las la-download text-secondary fs-18"></i></a>                                                    
-                                                                <a href="#"><i class="las la-pen text-secondary fs-18"></i></a>
-                                                                <a href="#"><i class="las la-trash-alt text-secondary fs-18"></i></a>
-                                                            </td>
-                                                        </tr><!--end tr-->  
-                                                        <tr>                                                        
-                                                            <td>
-                                                                <div class="d-inline-flex justify-content-center align-items-center thumb-md bg-blue-subtle rounded mx-auto me-1">
-                                                                    <i class="fa-solid fa-file-pdf fs-18 align-self-center mb-0 text-blue"></i>
-                                                                </div>
-                                                                <a href="#" class="text-body">invoice.pdf</a>
-                                                            </td>
-                                                            <td class="text-end">09 Sep 2024</td>                                   
-                                                            <td class="text-end"> 3.2 MB</td>
-                                                            <td class="text-end">
-                                                                -
-                                                            </td>
-                                                            <td class="text-end">   
-                                                                <a href="#"><i class="las la-download text-secondary fs-18"></i></a>                                                    
-                                                                <a href="#"><i class="las la-pen text-secondary fs-18"></i></a>
-                                                                <a href="#"><i class="las la-trash-alt text-secondary fs-18"></i></a>
-                                                            </td>
-                                                        </tr><!--end tr-->  
-                                                        <tr>                                                        
-                                                            <td>
-                                                                <div class="d-inline-flex justify-content-center align-items-center thumb-md bg-blue-subtle rounded mx-auto me-1">
-                                                                    <i class="fa-solid fa-file-pdf fs-18 align-self-center mb-0 text-blue"></i>
-                                                                </div>
-                                                                <a href="#" class="text-body">tutorial.pdf</a>
-                                                            </td>
-                                                            <td class="text-end">14 Aug 2024</td>                                   
-                                                            <td class="text-end"> 12.7 MB</td>
-                                                            <td class="text-end">
-                                                                <div class="img-group d-flex justify-content-end">
-                                                                    <a class="user-avatar position-relative d-inline-block" href="#">
-                                                                        <img src="assets/images/users/avatar-2.jpg" alt="avatar" class="thumb-md shadow-sm rounded-circle">
-                                                                    </a>
-                                                                    <a class="user-avatar position-relative d-inline-block ms-n2" href="#">
-                                                                        <img src="assets/images/users/avatar-3.jpg" alt="avatar" class="thumb-md shadow-sm rounded-circle">
-                                                                    </a>
-                                                                    <a class="user-avatar position-relative d-inline-block ms-n2" href="#">
-                                                                        <img src="assets/images/users/avatar-8.jpg" alt="avatar" class="thumb-md shadow-sm rounded-circle">
-                                                                    </a>                  
-                                                                </div>
-                                                            </td>
-                                                            <td class="text-end">   
-                                                                <a href="#"><i class="las la-download text-secondary fs-18"></i></a>                                                    
-                                                                <a href="#"><i class="las la-pen text-secondary fs-18"></i></a>
-                                                                <a href="#"><i class="las la-trash-alt text-secondary fs-18"></i></a>
-                                                            </td>
-                                                        </tr><!--end tr-->  
-                                                        <tr>                                                        
-                                                            <td>
-                                                                <div class="d-inline-flex justify-content-center align-items-center thumb-md bg-blue-subtle rounded mx-auto me-1">
-                                                                    <i class="fa-solid fa-file-pdf fs-18 align-self-center mb-0 text-blue"></i>
-                                                                </div>
-                                                                <a href="#" class="text-body">project.pdf</a>
-                                                            </td>
-                                                            <td class="text-end">12 Aug 2024</td>                                   
-                                                            <td class="text-end"> 5.2 MB</td>
-                                                            <td class="text-end">
-                                                                <div class="img-group d-flex justify-content-end">
-                                                                    <a class="user-avatar position-relative d-inline-block" href="#">
-                                                                        <img src="assets/images/users/avatar-1.jpg" alt="avatar" class="thumb-md shadow-sm rounded-circle">
-                                                                    </a>
-                                                                    <a class="user-avatar position-relative d-inline-block ms-n2" href="#">
-                                                                        <img src="assets/images/users/avatar-4.jpg" alt="avatar" class="thumb-md shadow-sm rounded-circle">
-                                                                    </a>
-                                                                    <a class="user-avatar position-relative d-inline-block ms-n2" href="#">
-                                                                        <img src="assets/images/users/avatar-6.jpg" alt="avatar" class="thumb-md shadow-sm rounded-circle">
-                                                                    </a>                 
-                                                                </div>
-                                                            </td>
-                                                            <td class="text-end">   
-                                                                <a href="#"><i class="las la-download text-secondary fs-18"></i></a>                                                    
-                                                                <a href="#"><i class="las la-pen text-secondary fs-18"></i></a>
-                                                                <a href="#"><i class="las la-trash-alt text-secondary fs-18"></i></a>
-                                                            </td>
-                                                        </tr><!--end tr-->     
-                                                                                     
+                                                    <tbody id="documents-table-body">
+                                        <tr>
+                                            <td>
+                                                <div
+                                                    class="d-inline-flex justify-content-center align-items-center thumb-md bg-blue-subtle rounded mx-auto me-1">
+                                                    <i class="fa-solid fa-file-pdf fs-18 align-self-center mb-0 text-blue"></i>
+                                                </div>
+                                                <a href="#" class="text-body">payment.pdf</a>
+                                            </td>
+                                            <td class="text-end">18 Jul 2024</td>
+                                            <td class="text-end"> 2.3 MB</td>
+                                            <td class="text-end">
+                                                <div class="img-group d-flex justify-content-end">
+                                                    <a class="user-avatar position-relative d-inline-block" href="#">
+                                                        <img src="assets/images/users/avatar-2.jpg" alt="avatar" class="thumb-md shadow-sm rounded-circle">
+                                                    </a>
+                                                </div>
+                                            </td>
+                                            <td class="text-end">
+                                                <a href="#"><i class="las la-info-circle text-secondary fs-18"></i></a>
+                                          </td>
+                                        </tr>
                                                     </tbody>
                                                 </table> <!--end table-->                                               
                                             </div><!--end /div--> 
@@ -1109,6 +976,29 @@
                 </div><!-- container -->
                 <!--Start Rightbar-->
                 <!--Start Rightbar/offcanvas-->
+
+
+                <!-- Upload Modal (optional, if you want a more styled approach) -->
+                <div class="modal fade" id="uploadModal" tabindex="-1" aria-labelledby="uploadModalLabel" aria-hidden="true">
+                    <div class="modal-dialog">
+                        <div class="modal-content">
+                            <div class="modal-header">
+                                <h5 class="modal-title" id="uploadModalLabel">Upload Files to Google Drive</h5>
+                                <button type="button" class="btn-close" data-bs-dismiss="modal" aria-label="Close"></button>
+                            </div>
+                            <div class="modal-body">
+                                <input type="file" id="modalFileUploadInput" class="form-control" multiple>
+                            </div>
+                            <div class="modal-footer">
+                                <button type="button" class="btn btn-secondary" data-bs-dismiss="modal">Cancel</button>
+                                <button type="button" class="btn btn-primary" id="uploadFilesBtn">Upload</button>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+
+
+
                 <div class="offcanvas offcanvas-end" tabindex="-1" id="Appearance" aria-labelledby="AppearanceLabel">
                     <div class="offcanvas-header border-bottom justify-content-between">
                       <h5 class="m-0 font-14" id="AppearanceLabel">Appearance</h5>
@@ -1189,6 +1079,8 @@
         <script src="assets/js/app.js"></script>
 
         <!-- my js -->
+        <script src="https://cdn.jsdelivr.net/npm/sweetalert2@11/dist/sweetalert2.all.min.js"></script>
+
          <script src="Fetch/Files2.js"></script>
          <script src="Fetch/Shared.js"></script>
     </body>
