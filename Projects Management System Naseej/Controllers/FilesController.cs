@@ -28,6 +28,7 @@ using Microsoft.IdentityModel.Tokens;
 using System.Text;
 using Projects_Management_System_Naseej.DTOs.GoogleUserDto;
 using Projects_Management_System_Naseej.DTOs.RoleDTOs;
+using Google;
 namespace Projects_Management_System_Naseej.Controllers
 {
     [Route("api/[controller]")]
@@ -1274,19 +1275,66 @@ namespace Projects_Management_System_Naseej.Controllers
             try
             {
                 var webViewLink = await _googleDriveService.GetFileWebViewLink(fileId);
-                return Ok(new { webViewLink });
+
+                // Additional validation
+                if (string.IsNullOrEmpty(webViewLink))
+                {
+                    return NotFound(new
+                    {
+                        message = "No view link could be generated for this file",
+                        fileId = fileId
+                    });
+                }
+
+                return Ok(new
+                {
+                    webViewLink,
+                    fileId
+                });
+            }
+            catch (FileNotFoundException ex)
+            {
+                _logger.LogWarning(ex, $"File not found: {fileId}");
+                return NotFound(new
+                {
+                    message = ex.Message,
+                    fileId
+                });
+            }
+            catch (UnauthorizedAccessException ex)
+            {
+                _logger.LogError(ex, $"Unauthorized access for file {fileId}");
+                return Unauthorized(new
+                {
+                    message = "Authentication or permission error",
+                    details = ex.Message,
+                    fileId
+                });
+            }
+            catch (GoogleApiException ex)
+            {
+                // Catch-all for Google API specific exceptions
+                _logger.LogError(ex, $"Google API error for file {fileId}");
+
+                return StatusCode((int)ex.HttpStatusCode, new
+                {
+                    message = "Google Drive API error",
+                    details = ex.Message,
+                    httpStatusCode = ex.HttpStatusCode,
+                    fileId
+                });
             }
             catch (Exception ex)
             {
-                _logger.LogError(ex, $"Error getting web view link for file {fileId}");
+                _logger.LogError(ex, $"Unexpected error getting web view link for file {fileId}");
                 return StatusCode(500, new
                 {
                     message = "Failed to get file view link",
-                    details = ex.Message
+                    details = ex.Message,
+                    fileId
                 });
             }
         }
-
         [HttpPut("update-in-drive/{googleDriveFileId}")]
         public async Task<IActionResult> UpdateInDrive(string googleDriveFileId, IFormFile file)
         {
@@ -1367,8 +1415,8 @@ namespace Projects_Management_System_Naseej.Controllers
             }
 
         }
-     
-        
+
+
         [HttpGet("filter-files")]
         public async Task<IActionResult> FilterFiles([FromQuery] GoogleDriveFilterRequest filters)
         {

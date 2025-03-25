@@ -5,6 +5,7 @@ using Google.Apis.Util.Store;
 using Google.Apis.Upload;
 using System.IO;
 using Projects_Management_System_Naseej.DTOs.GoogleUserDto;
+using Google;
 
 namespace Projects_Management_System_Naseej.Services
 {
@@ -196,8 +197,31 @@ namespace Projects_Management_System_Naseej.Services
             try
             {
                 var driveService = await GetDriveServiceAsync();
-                var file = await driveService.Files.Get(fileId).ExecuteAsync();
+
+                // Specify the fields you want to retrieve
+                var request = driveService.Files.Get(fileId);
+                request.Fields = "id, name, webViewLink, sharingUser, permissions"; // Request specific fields
+
+                var file = await request.ExecuteAsync();
+
+                // Check if WebViewLink exists
+                if (string.IsNullOrEmpty(file.WebViewLink))
+                {
+                    // Try to create a sharing link if one doesn't exist
+                    return await CreateSharingLink(driveService, fileId);
+                }
+
                 return file.WebViewLink;
+            }
+            catch (GoogleApiException ex) when (ex.HttpStatusCode == System.Net.HttpStatusCode.NotFound)
+            {
+                _logger.LogWarning($"File not found: {fileId}");
+                throw new FileNotFoundException($"File with ID {fileId} not found in Google Drive", ex);
+            }
+            catch (GoogleApiException ex) when (ex.HttpStatusCode == System.Net.HttpStatusCode.Unauthorized)
+            {
+                _logger.LogError(ex, $"Unauthorized access getting web view link for file {fileId}");
+                throw new UnauthorizedAccessException("Failed to authenticate with Google Drive", ex);
             }
             catch (Exception ex)
             {
@@ -206,6 +230,49 @@ namespace Projects_Management_System_Naseej.Services
             }
         }
 
+        private async Task<string> CreateSharingLink(DriveService driveService, string fileId)
+        {
+            try
+            {
+                // Create a permission for anyone with the link
+                var permission = new Google.Apis.Drive.v3.Data.Permission
+                {
+                    Type = "anyone",
+                    Role = "reader"
+                };
+
+                // Create the permission
+                var permissionRequest = driveService.Permissions.Create(permission, fileId);
+                await permissionRequest.ExecuteAsync();
+
+                // Retrieve the updated file to get the web view link
+                var fileRequest = driveService.Files.Get(fileId);
+                fileRequest.Fields = "webViewLink";
+                var updatedFile = await fileRequest.ExecuteAsync();
+
+                return updatedFile.WebViewLink;
+            }
+            catch (GoogleApiException ex)
+            {
+                _logger.LogError(ex, $"Error creating sharing link for file {fileId}");
+
+                // More specific error handling
+                switch (ex.HttpStatusCode)
+                {
+                    case System.Net.HttpStatusCode.Forbidden:
+                        throw new UnauthorizedAccessException("Insufficient permissions to create sharing link", ex);
+                    case System.Net.HttpStatusCode.NotFound:
+                        throw new FileNotFoundException($"File {fileId} not found", ex);
+                    default:
+                        throw;
+                }
+            }
+            catch (Exception ex)
+            {
+                _logger.LogError(ex, $"Unexpected error creating sharing link for file {fileId}");
+                throw;
+            }
+        }
         public async Task<string> UpdateFileAsync(string fileId, Stream fileStream, string mimeType)
         {
             try

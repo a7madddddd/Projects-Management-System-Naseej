@@ -1,4 +1,6 @@
-﻿using Projects_Management_System_Naseej.DTOs.FileDTOs;
+﻿using Microsoft.Graph.Models;
+using Projects_Management_System_Naseej.DTOs.FileDTOs;
+using Projects_Management_System_Naseej.DTOs.GoogleUserDto;
 
 namespace Projects_Management_System_Naseej.Repositories
 {
@@ -16,6 +18,7 @@ namespace Projects_Management_System_Naseej.Repositories
         Task SetFilePermissionsAsync(int fileId, Dictionary<int, bool> permissions);
         Task<Dictionary<int, bool>> GetFilePermissionsAsync(int fileId);
         Task<FileConversionDTO> ConvertFileAsync(int fileId, string targetExtension);
-
+        Task<List<Models.File>> GetFilesPaginatedAsync(GoogleDriveListRequest request);
+        Task<int> GetTotalFileCountAsync(GoogleDriveListRequest request);
     }
 }

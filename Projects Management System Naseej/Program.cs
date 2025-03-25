@@ -19,6 +19,9 @@ using Google.Apis.Auth.AspNetCore3;
 using Microsoft.AspNetCore.Authentication.OAuth;
 using System.Security.Claims;
 using Serilog;
+using Google.Apis.Drive.v3;
+using Google.Apis.Services;
+using File = System.IO.File;
 
 
 
@@ -64,6 +67,49 @@ builder.Services.AddRazorPages();
 
 builder.Services.AddDbContext<MyDbContext>(options =>
     options.UseSqlServer(builder.Configuration.GetConnectionString("YourConnectionString")));
+
+
+var credentialsPath = builder.Configuration["GoogleServiceAccount:CredentialsPath"];
+var applicationName = builder.Configuration["GoogleServiceAccount:ApplicationName"];
+builder.Services.AddScoped<DriveService>(provider =>
+{
+    try
+    {
+        var credentialsPath = Path.Combine(Directory.GetCurrentDirectory(), "service-account.json");
+
+        if (!File.Exists(credentialsPath))
+        {
+            throw new FileNotFoundException($"Google service account file not found: {credentialsPath}");
+        }
+
+        GoogleCredential credential;
+
+        using (var stream = new FileStream(credentialsPath, FileMode.Open, FileAccess.Read))
+        {
+            credential = GoogleCredential.FromStream(stream)
+                .CreateScoped(new[]
+                {
+                    DriveService.Scope.Drive,           // Full drive access
+                    DriveService.Scope.DriveFile        // File-level access
+                });
+        }
+
+        return new DriveService(new BaseClientService.Initializer()
+        {
+            HttpClientInitializer = credential,
+            ApplicationName = "Projects Management System Naseej"
+        });
+    }
+    catch (Exception ex)
+    {
+        // Comprehensive error logging
+        Console.WriteLine($"Drive Service Initialization Error: {ex.Message}");
+        Console.WriteLine($"Stack Trace: {ex.StackTrace}");
+        throw;
+    }
+});
+
+
 
 // Add repositories with Scoped lifetime
 builder.Services.AddScoped<IFileRepository, FileRepository>();
@@ -145,6 +191,8 @@ builder.Services.AddControllers()
         .ConfigureApiBehaviorOptions(options =>
         {
             options.SuppressMapClientErrors = true;
+            options.SuppressModelStateInvalidFilter = true; // Optional
+
         });
 
 

@@ -9,6 +9,7 @@ using System.IO;
 using Microsoft.AspNetCore.Hosting;
 using Microsoft.Extensions.Hosting;
 using System.Threading.Tasks;
+using Projects_Management_System_Naseej.DTOs.GoogleUserDto;
 
 namespace Projects_Management_System_Naseej.Implementations
 {
@@ -524,6 +525,56 @@ namespace Projects_Management_System_Naseej.Implementations
         }
 
 
+        public async Task<List<Models.File>> GetFilesPaginatedAsync(GoogleDriveListRequest request)
+        {
+            try
+            {
+                // Base query
+                var query = _context.Files.AsQueryable();
+
+                // Apply search if not empty
+                if (!string.IsNullOrWhiteSpace(request.SearchQuery))
+                {
+                    query = query.Where(f =>
+                        f.FileName.Contains(request.SearchQuery) ||
+                        f.FileExtension.Contains(request.SearchQuery)
+                    );
+                }
+
+                // Apply pagination
+                return await query
+                    .OrderByDescending(f => f.UploadDate)
+                    .Skip((request.PageNumber - 1) * request.PageSize)
+                    .Take(request.PageSize)
+                    .ToListAsync();
+            }
+            catch (Exception ex)
+            {
+                throw;
+            }
+        }
+
+        public async Task<int> GetTotalFileCountAsync(GoogleDriveListRequest request)
+        {
+            try
+            {
+                var query = _context.Files.AsQueryable();
+
+                if (!string.IsNullOrWhiteSpace(request.SearchQuery))
+                {
+                    query = query.Where(f =>
+                        f.FileName.Contains(request.SearchQuery) ||
+                        f.FileExtension.Contains(request.SearchQuery)
+                    );
+                }
+
+                return await query.CountAsync();
+            }
+            catch (Exception ex)
+            {
+                throw;
+            }
+        }
 
         private string GetClientIpAddress()
         {
