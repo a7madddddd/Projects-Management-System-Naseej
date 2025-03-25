@@ -6,6 +6,8 @@ using Google.Apis.Upload;
 using System.IO;
 using Projects_Management_System_Naseej.DTOs.GoogleUserDto;
 using Google;
+using Projects_Management_System_Naseej.Models;
+using File = System.IO.File;
 
 namespace Projects_Management_System_Naseej.Services
 {
@@ -15,17 +17,20 @@ namespace Projects_Management_System_Naseej.Services
         private readonly ILogger<GoogleDriveService> _logger;
         private readonly IWebHostEnvironment _environment;
         private readonly DriveService _driveService;
+        private readonly MyDbContext _context;
 
         public GoogleDriveService(
             IConfiguration configuration,
             ILogger<GoogleDriveService> logger,
             IWebHostEnvironment environment,
-            DriveService driveService)
+            DriveService driveService, MyDbContext context
+            )
         {
             _configuration = configuration;
             _logger = logger;
             _environment = environment;
             _driveService = driveService;
+            _context = context;
         }
         private async Task<DriveService> GetDriveServiceAsync()
         {
@@ -346,7 +351,8 @@ namespace Projects_Management_System_Naseej.Services
                     CreatedTime = file.CreatedTime,
                     Size = file.Size ?? 0,
                     WebViewLink = file.WebViewLink,
-                    FileExtension = Path.GetExtension(file.Name)
+                    FileExtension = Path.GetExtension(file.Name),
+                    UploadedBy = GetUploadedByFromLocalDatabase(file.Id) // Add this method
                 }).ToList();
             }
             catch (Exception ex)
@@ -356,6 +362,15 @@ namespace Projects_Management_System_Naseej.Services
             }
         }
 
+        // Add this method to retrieve UploadedBy from local database
+        private int GetUploadedByFromLocalDatabase(string googleDriveFileId)
+        {
+            // This assumes you have a DbContext injected or accessible
+            var file = _context.Files
+                .FirstOrDefault(f => f.GoogleDriveFileId == googleDriveFileId);
+
+            return file?.UploadedBy ?? 0; // Return 0 or default user ID if not found
+        }
         public async Task<int> GetTotalFileCountAsync(string searchQuery = null)
         {
             try

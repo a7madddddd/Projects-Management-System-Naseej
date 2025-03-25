@@ -992,9 +992,9 @@ namespace Projects_Management_System_Naseej.Controllers
 
         [HttpGet("list-files")]
         public async Task<IActionResult> ListFiles(
-          [FromQuery] int PageNumber = 1,
-          [FromQuery] int PageSize = 5,
-          [FromQuery] string SearchQuery = "")
+      [FromQuery] int PageNumber = 1,
+      [FromQuery] int PageSize = 10,
+      [FromQuery] string SearchQuery = "")
         {
             try
             {
@@ -1008,6 +1008,13 @@ namespace Projects_Management_System_Naseej.Controllers
                 // Directly fetch files from Google Drive
                 var files = await _googleDriveService.ListFilesAsync(query);
 
+                // Fetch user details for the uploaded files
+                var userIds = files.Select(f => f.UploadedBy).Distinct().ToList();
+                var users = await _context.Users
+                    .Where(u => userIds.Contains(u.UserId))
+                    .Select(u => new { u.UserId, u.FirstName }) // Adjust based on your User model
+                    .ToDictionaryAsync(u => u.UserId, u => u.FirstName);
+
                 // Map to FileDTO 
                 var fileDtos = files.Select(f => new FileDTO
                 {
@@ -1018,7 +1025,8 @@ namespace Projects_Management_System_Naseej.Controllers
                     GoogleDriveFileId = f.Id,
                     WebViewLink = f.WebViewLink,
                     MimeType = f.MimeType,
-                    UploadedBy = f.UploadedBy
+                    UploadedBy = f.UploadedBy,
+                    UploadedByName = users.TryGetValue(f.UploadedBy, out var userName) ? userName : "Unknown"
                 }).ToList();
 
                 // Get total count of files
@@ -1045,7 +1053,6 @@ namespace Projects_Management_System_Naseej.Controllers
                 });
             }
         }
-
 
         // MIME Type detection
         private string GetMimeType(string fileName)

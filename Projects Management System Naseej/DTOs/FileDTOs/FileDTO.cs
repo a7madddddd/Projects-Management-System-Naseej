@@ -9,6 +9,7 @@
         public long? FileSize { get; set; }
         public int? CategoryId { get; set; }
         public int UploadedBy { get; set; }
+        public string UploadedByName { get; set; } 
         public DateTime UploadDate { get; set; }
         public int? LastModifiedBy { get; set; }
         public DateTime? LastModifiedDate { get; set; }

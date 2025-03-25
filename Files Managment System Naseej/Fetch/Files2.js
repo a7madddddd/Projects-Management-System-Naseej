@@ -117,14 +117,9 @@ class FileRenderer {
         // Members column (placeholder)
         const membersCell = document.createElement('td');
         membersCell.className = 'text-end';
-        membersCell.innerHTML = `
-            <div class="img-group d-flex justify-content-end">
-                <a class="user-avatar position-relative d-inline-block" href="#">
-                    <img src="assets/images/users/avatar-2.jpg" alt="avatar" class="thumb-md shadow-sm rounded-circle">
-                </a>
-            </div>
-        `;
+        membersCell.textContent = file.uploadedByName || 'Unknown';
         row.appendChild(membersCell);
+
 
         // Action column
         const actionCell = document.createElement('td');

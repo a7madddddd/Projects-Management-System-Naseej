@@ -11,7 +11,7 @@
         public List<OwnerDto> Owners { get; set; }
 
         public int UploadedBy { get; set; }
-
+        public string UploadedByName { get; set; } // Add this
         public string FileExtension { get; set; }
     }
 }
