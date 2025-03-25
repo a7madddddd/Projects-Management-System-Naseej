@@ -20,5 +20,6 @@ namespace Projects_Management_System_Naseej.Repositories
         Task<FileConversionDTO> ConvertFileAsync(int fileId, string targetExtension);
         Task<List<Models.File>> GetFilesPaginatedAsync(GoogleDriveListRequest request);
         Task<int> GetTotalFileCountAsync(GoogleDriveListRequest request);
+        Task SyncGoogleDriveFiles(int currentUserId);
     }
 }

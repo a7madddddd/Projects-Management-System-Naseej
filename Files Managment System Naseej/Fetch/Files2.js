@@ -14,7 +14,7 @@ class FileService {
     }
 
     // Fetch files
-    async fetchFiles(pageNumber = 1, pageSize = 10, searchQuery = '') {
+    async fetchFiles(pageNumber = 1, pageSize = 5, searchQuery = '') {
         try {
             const response = await fetch(
                 `${this.baseUrl}/Files/list-files?PageNumber=${pageNumber}&PageSize=${pageSize}&SearchQuery=${searchQuery}`,
@@ -28,17 +28,12 @@ class FileService {
                 throw new Error('Failed to fetch files');
             }
 
-            const data = await response.json();
-
-            // Filter out files without googleDriveFileId
-            data.files = data.files.filter(file => file.googleDriveFileId !== null);
-
-            return data;
+            return await response.json();
         } catch (error) {
             console.error('Error fetching files:', error);
             throw error;
         }
-    }
+    }   
 
     // Get file view link
     async getFileViewLink(googleDriveFileId) {
@@ -354,7 +349,7 @@ class FileActionService {
             // Confirm deletion
             const result = await Swal.fire({
                 title: 'Are you sure?',
-                text: 'Do you want to delete this file?',
+                text: 'Do you want to delete this file from Google Drive?',
                 icon: 'warning',
                 showCancelButton: true,
                 confirmButtonColor: '#3085d6',
@@ -363,34 +358,51 @@ class FileActionService {
             });
 
             if (result.isConfirmed) {
-                // Send delete request
-                const response = await fetch(`${this.baseUrl}/Files/${fileId}`, {
+                // Send delete request to the new endpoint
+                const response = await fetch(`${this.baseUrl}/Files/delete-file/${fileId}`, {
                     method: 'DELETE',
                     headers: this.getHeaders()
                 });
 
+                // Check response
                 if (!response.ok) {
-                    throw new Error('Failed to delete file');
+                    // Try to parse error response
+                    const errorData = await response.json().catch(() => ({}));
+
+                    throw new Error(
+                        errorData.message ||
+                        `Failed to delete file. Status: ${response.status}`
+                    );
                 }
 
+                // Parse successful response
+                const deleteResult = await response.json();
+
+                // Show success message
                 Swal.fire({
                     icon: 'success',
                     title: 'Deleted!',
-                    text: 'The file has been deleted successfully.'
+                    text: deleteResult.message || 'The file has been deleted successfully from Google Drive.'
                 });
 
                 // Refresh file list if function exists
                 if (typeof initializeFileTable === 'function') {
                     initializeFileTable();
                 }
+
+                return deleteResult;
             }
         } catch (error) {
             console.error('Delete file error:', error);
+
             Swal.fire({
                 icon: 'error',
                 title: 'Deletion Failed',
-                text: error.message || 'Unable to delete file'
+                text: error.message || 'Unable to delete file',
+                footer: '<a href="#">Contact support if the problem persists</a>'
             });
+
+            throw error;
         }
     }
 }

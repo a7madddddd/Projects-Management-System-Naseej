@@ -38,4 +38,9 @@
 		<PackageReference Include="Serilog.Sinks.File" Version="6.0.0" />
 		<PackageReference Include="Swashbuckle.AspNetCore" Version="6.6.2" />
 	</ItemGroup>
+
+	<ItemGroup>
+	  <Folder Include="wwwroot\Files\" />
+	  <Folder Include="wwwroot\wwwroot\Files\" />
+	</ItemGroup>
 </Project>

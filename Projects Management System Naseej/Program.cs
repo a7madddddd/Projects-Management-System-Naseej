@@ -69,7 +69,7 @@ builder.Services.AddDbContext<MyDbContext>(options =>
     options.UseSqlServer(builder.Configuration.GetConnectionString("YourConnectionString")));
 
 
-var credentialsPath = builder.Configuration["GoogleServiceAccount:CredentialsPath"];
+var credentialsPath = builder.Configuration["GoogleServiceAccount:C:\\Users\\Oniza\\source\\repos\\Projects Management System Naseej\\Projects Management System Naseej\\credentials.json"];
 var applicationName = builder.Configuration["GoogleServiceAccount:ApplicationName"];
 builder.Services.AddScoped<DriveService>(provider =>
 {

@@ -6,7 +6,7 @@
         public string FileName { get; set; }
         public string FileExtension { get; set; }
         public string FilePath { get; set; }
-        public long FileSize { get; set; }
+        public long? FileSize { get; set; }
         public int? CategoryId { get; set; }
         public int UploadedBy { get; set; }
         public DateTime UploadDate { get; set; }
@@ -17,5 +17,8 @@
         public string? GoogleDriveFileId { get; set; }
 
         public bool? IsSyncedWithGoogleDrive { get; set; }
+        public string MimeType { get; set; }
+
+        public string ? WebViewLink { get; set; }
     }
 }

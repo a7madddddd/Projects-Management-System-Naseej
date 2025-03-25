@@ -9,5 +9,9 @@
         public long? Size { get; set; }
         public string WebViewLink { get; set; }
         public List<OwnerDto> Owners { get; set; }
+
+        public int UploadedBy { get; set; }
+
+        public string FileExtension { get; set; }
     }
 }

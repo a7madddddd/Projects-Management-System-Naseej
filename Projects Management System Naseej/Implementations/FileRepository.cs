@@ -10,6 +10,9 @@ using Microsoft.AspNetCore.Hosting;
 using Microsoft.Extensions.Hosting;
 using System.Threading.Tasks;
 using Projects_Management_System_Naseej.DTOs.GoogleUserDto;
+using Projects_Management_System_Naseej.Services;
+using System.IdentityModel.Tokens.Jwt;
+using System.Security.Claims;
 
 namespace Projects_Management_System_Naseej.Implementations
 {
@@ -20,16 +23,16 @@ namespace Projects_Management_System_Naseej.Implementations
         private readonly IHttpContextAccessor _httpContextAccessor;
         private readonly IConfiguration _configuration;
         private readonly IWebHostEnvironment _environment;
-
+        private readonly GoogleDriveService _googleDriveService;
         public FileRepository(MyDbContext context, IEnumerable<IFileTypeHandler> fileTypeHandlers, IHttpContextAccessor httpContextAccessor, IConfiguration configuration, IWebHostEnvironment environment
-    )
+    , GoogleDriveService googleDriveService)
         {
             _context = context;
             _fileTypeHandlers = fileTypeHandlers;
             _httpContextAccessor = httpContextAccessor;
             _configuration = configuration;
             _environment = environment;
-
+            _googleDriveService = googleDriveService;
         }
 
         private async Task ValidateFile(IFormFile file)
@@ -498,7 +501,7 @@ namespace Projects_Management_System_Naseej.Implementations
             }
         }
 
-        public async Task<PaginatedResult<FileDTO>> GetFilesAsync(int pageNumber = 1, int pageSize = 10)
+        public async Task<PaginatedResult<FileDTO>> GetFilesAsync(int pageNumber = 1, int pageSize = 5)
         {
             var totalCount = await _context.Files.CountAsync();
             var files = await _context.Files
@@ -529,15 +532,19 @@ namespace Projects_Management_System_Naseej.Implementations
         {
             try
             {
-                // Base query
-                var query = _context.Files.AsQueryable();
+                // Base query with multiple conditions
+                var query = _context.Files
+                    .Where(f =>
+                        !string.IsNullOrEmpty(f.GoogleDriveFileId) &&
+                        f.IsActive == true) // Add additional conditions as needed
+                    .AsQueryable();
 
-                // Apply search if not empty
+                // Apply search if not empty (case-insensitive)
                 if (!string.IsNullOrWhiteSpace(request.SearchQuery))
                 {
                     query = query.Where(f =>
-                        f.FileName.Contains(request.SearchQuery) ||
-                        f.FileExtension.Contains(request.SearchQuery)
+                        EF.Functions.Like(f.FileName, $"%{request.SearchQuery}%") ||
+                        EF.Functions.Like(f.FileExtension, $"%{request.SearchQuery}%")
                     );
                 }
 
@@ -550,9 +557,59 @@ namespace Projects_Management_System_Naseej.Implementations
             }
             catch (Exception ex)
             {
+                Console.WriteLine( "Error in GetFilesPaginatedAsync");
                 throw;
             }
         }
+        public async Task SyncGoogleDriveFiles(int currentUserId)
+        {
+            try
+            {
+                // Fetch files from Google Drive
+                var googleDriveFiles = await _googleDriveService.ListFilesAsync(new GoogleDriveListRequest());
+
+                foreach (var driveFile in googleDriveFiles)
+                {
+                    // Check if file already exists in local database
+                    var existingFile = await _context.Files
+                        .FirstOrDefaultAsync(f => f.GoogleDriveFileId == driveFile.Id);
+
+                    if (existingFile == null)
+                    {
+                        // Create new file entry
+                        var newFile = new Models.File
+                        {
+                            FileName = driveFile.Name,
+                            FileExtension = Path.GetExtension(driveFile.Name),
+                            GoogleDriveFileId = driveFile.Id,
+                            UploadDate = driveFile.CreatedTime,
+                            FileSize = driveFile.Size ?? 0,
+                            IsPublic = true, // Adjust based on your requirements
+                            UploadedBy = currentUserId // Use the passed user ID
+                        };
+
+                        _context.Files.Add(newFile);
+                    }
+                    else
+                    {
+                        // Update existing file
+                        existingFile.FileName = driveFile.Name;
+                        existingFile.FileExtension = Path.GetExtension(driveFile.Name);
+                        existingFile.UploadDate = driveFile.CreatedTime;
+                        existingFile.FileSize = driveFile.Size ?? 0;
+                    }
+                }
+
+                await _context.SaveChangesAsync();
+            }
+            catch (Exception ex)
+            {
+                // Improved error handling
+                throw; // Re-throw to allow caller to handle
+            }
+        }
+
+
 
         public async Task<int> GetTotalFileCountAsync(GoogleDriveListRequest request)
         {
@@ -575,6 +632,7 @@ namespace Projects_Management_System_Naseej.Implementations
                 throw;
             }
         }
+
 
         private string GetClientIpAddress()
         {

@@ -29,6 +29,7 @@ using System.Text;
 using Projects_Management_System_Naseej.DTOs.GoogleUserDto;
 using Projects_Management_System_Naseej.DTOs.RoleDTOs;
 using Google;
+using Google.Apis.Drive.v3;
 namespace Projects_Management_System_Naseej.Controllers
 {
     [Route("api/[controller]")]
@@ -989,6 +990,63 @@ namespace Projects_Management_System_Naseej.Controllers
             // throw new UnauthorizedAccessException("No authenticated user found");
         }
 
+        [HttpGet("list-files")]
+        public async Task<IActionResult> ListFiles(
+          [FromQuery] int PageNumber = 1,
+          [FromQuery] int PageSize = 5,
+          [FromQuery] string SearchQuery = "")
+        {
+            try
+            {
+                var query = new GoogleDriveListRequest
+                {
+                    PageNumber = PageNumber,
+                    PageSize = PageSize,
+                    SearchQuery = SearchQuery ?? ""
+                };
+
+                // Directly fetch files from Google Drive
+                var files = await _googleDriveService.ListFilesAsync(query);
+
+                // Map to FileDTO 
+                var fileDtos = files.Select(f => new FileDTO
+                {
+                    FileName = f.Name,
+                    FileExtension = f.FileExtension,
+                    UploadDate = f.CreatedTime ?? DateTime.UtcNow,
+                    FileSize = f.Size,
+                    GoogleDriveFileId = f.Id,
+                    WebViewLink = f.WebViewLink,
+                    MimeType = f.MimeType,
+                    UploadedBy = f.UploadedBy
+                }).ToList();
+
+                // Get total count of files
+                var totalCount = await _googleDriveService.GetTotalFileCountAsync(SearchQuery);
+
+                return Ok(new
+                {
+                    Files = fileDtos,
+                    Pagination = new
+                    {
+                        CurrentPage = query.PageNumber,
+                        PageSize = query.PageSize,
+                        TotalCount = totalCount
+                    }
+                });
+            }
+            catch (Exception ex)
+            {
+                _logger.LogError(ex, "Error retrieving files from Google Drive");
+                return StatusCode(500, new
+                {
+                    message = "An error occurred while retrieving files",
+                    details = ex.Message
+                });
+            }
+        }
+
+
         // MIME Type detection
         private string GetMimeType(string fileName)
         {
@@ -1333,6 +1391,7 @@ namespace Projects_Management_System_Naseej.Controllers
                     details = ex.Message,
                     fileId
                 });
+      
             }
         }
         [HttpPut("update-in-drive/{googleDriveFileId}")]
@@ -1367,87 +1426,154 @@ namespace Projects_Management_System_Naseej.Controllers
 
 
 
-        [HttpGet("list-files")]
-        public async Task<IActionResult> ListFiles(
-      [FromQuery] int PageNumber = 1,
-      [FromQuery] int PageSize = 10,
-      [FromQuery] string SearchQuery = "")
+        [HttpDelete("delete-file/{fileId}")]
+        public async Task<IActionResult> DeleteFileFromGoogleDrive(string fileId)
         {
             try
             {
-                var query = new GoogleDriveListRequest
+                // Validate input
+                if (string.IsNullOrWhiteSpace(fileId))
                 {
-                    PageNumber = PageNumber,
-                    PageSize = PageSize,
-                    SearchQuery = SearchQuery ?? "" // Ensure it's never null
-                };
+                    return BadRequest(new
+                    {
+                        message = "Invalid file ID",
+                        status = "error"
+                    });
+                }
 
-                var files = await _fileRepository.GetFilesPaginatedAsync(query);
+                // Optional: Check user permissions
+                var currentUserId = GetCurrentUserId();
+                var fileEntity = await _context.Files
+                    .FirstOrDefaultAsync(f => f.GoogleDriveFileId == fileId);
 
-                // Optional: Map to DTO
-                var fileDtos = files.Select(f => new FileDTO
+                // Permission check
+                if (fileEntity == null)
                 {
-                    FileId = f.FileId,
-                    FileName = f.FileName,
-                    FileExtension = f.FileExtension,
-                    FilePath = f.FilePath,
-                    UploadDate = f.UploadDate.GetValueOrDefault(),
-                    FileSize = f.FileSize,
-                    IsPublic = f.IsPublic ?? false,
-                    GoogleDriveFileId = f.GoogleDriveFileId
-                }).ToList();
+                    return NotFound(new
+                    {
+                        message = "File not found in database",
+                        status = "error"
+                    });
+                }
+
+                // Verify user has permission to delete
+                if (fileEntity.UploadedBy != currentUserId)
+                {
+                    return Forbid(); // Or return Unauthorized
+                }
+
+                // Delete from Google Drive
+                await _googleDriveService.DeleteFileAsync(fileId);
+
+                // Remove from local database
+                _context.Files.Remove(fileEntity);
+                await _context.SaveChangesAsync();
+
+                // Log the deletion
+                _logger.LogInformation($"File {fileId} deleted by user {currentUserId}");
 
                 return Ok(new
                 {
-                    Files = fileDtos,
-                    Pagination = new
-                    {
-                        CurrentPage = query.PageNumber,
-                        PageSize = query.PageSize,
-                        TotalCount = await _fileRepository.GetTotalFileCountAsync(query)
-                    }
+                    message = "File successfully deleted",
+                    fileId = fileId,
+                    status = "success"
+                });
+            }
+            catch (GoogleApiException ex) when (ex.HttpStatusCode == System.Net.HttpStatusCode.NotFound)
+            {
+                _logger.LogWarning($"Attempted to delete non-existent file: {fileId}");
+                return NotFound(new
+                {
+                    message = "File not found in Google Drive",
+                    fileId = fileId,
+                    status = "error"
+                });
+            }
+            catch (UnauthorizedAccessException ex)
+            {
+                _logger.LogError(ex, $"Unauthorized deletion attempt for file {fileId}");
+                return Unauthorized(new
+                {
+                    message = "You are not authorized to delete this file",
+                    fileId = fileId,
+                    status = "error"
                 });
             }
             catch (Exception ex)
             {
-                _logger.LogError(ex, "Error retrieving files");
-                return StatusCode(500, new { message = "An error occurred while retrieving files" });
-            }
-
-        }
-
-
-        [HttpGet("filter-files")]
-        public async Task<IActionResult> FilterFiles([FromQuery] GoogleDriveFilterRequest filters)
-        {
-            try
-            {
-                var driveFiles = await _googleDriveService.FilterFilesAsync(filters);
-
-                var fileList = driveFiles.Select(file => new GoogleDriveFileDto
-                {
-                    Id = file.Id,
-                    Name = file.Name,
-                    MimeType = file.MimeType,
-                    CreatedTime = file.CreatedTime,
-                    Size = file.Size,
-                    WebViewLink = file.WebViewLink
-                }).ToList();
-
-                return Ok(fileList);
-            }
-            catch (Exception ex)
-            {
-                _logger.LogError(ex, "Error filtering Google Drive files");
+                _logger.LogError(ex, $"Error deleting file {fileId}");
                 return StatusCode(500, new
                 {
-                    message = "Failed to filter files",
-                    details = ex.Message
+                    message = "An unexpected error occurred during file deletion",
+                    details = ex.Message,
+                    fileId = fileId,
+                    status = "error"
                 });
             }
         }
 
+        [HttpDelete("bulk-delete")]
+        public async Task<IActionResult> BulkDeleteFiles([FromBody] List<string> fileIds)
+        {
+            if (fileIds == null || !fileIds.Any())
+            {
+                return BadRequest(new
+                {
+                    message = "No file IDs provided",
+                    status = "error"
+                });
+            }
 
+            var currentUserId = GetCurrentUserId();
+            var deletionResults = new List<object>();
+
+            foreach (var fileId in fileIds)
+            {
+                try
+                {
+                    var fileEntity = await _context.Files
+                        .FirstOrDefaultAsync(f => f.GoogleDriveFileId == fileId);
+
+                    if (fileEntity == null || fileEntity.UploadedBy != currentUserId)
+                    {
+                        deletionResults.Add(new
+                        {
+                            fileId,
+                            status = "failed",
+                            reason = "Not found or unauthorized"
+                        });
+                        continue;
+                    }
+
+                    await _googleDriveService.DeleteFileAsync(fileId);
+                    _context.Files.Remove(fileEntity);
+
+                    deletionResults.Add(new
+                    {
+                        fileId,
+                        status = "success"
+                    });
+                }
+                catch (Exception ex)
+                {
+                    deletionResults.Add(new
+                    {
+                        fileId,
+                        status = "failed",
+                        reason = ex.Message
+                    });
+                }
+            }
+
+            await _context.SaveChangesAsync();
+
+            return Ok(new
+            {
+                message = "Bulk delete processed",
+                results = deletionResults,
+                status = "success"
+            });
+        }
 
     }
 }

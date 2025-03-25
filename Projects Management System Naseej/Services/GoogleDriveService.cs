@@ -300,18 +300,24 @@ namespace Projects_Management_System_Naseej.Services
                 throw;
             }
         }
-        public async Task<List<Google.Apis.Drive.v3.Data.File>> ListFilesAsync(GoogleDriveListRequest request)
+        public async Task<List<GoogleDriveFileDto>> ListFilesAsync(GoogleDriveListRequest request)
         {
             try
             {
-                var listRequest = _driveService.Files.List();
+                // Use the actual drive service, not the injected one
+                var driveService = await GetDriveServiceAsync();
+
+                var listRequest = driveService.Files.List();
 
                 // Configure query parameters
                 listRequest.PageSize = request.PageSize;
                 listRequest.Fields = "nextPageToken, files(id, name, mimeType, createdTime, size, webViewLink, owners)";
 
                 // Build dynamic query
-                var queryParts = new List<string>();
+                var queryParts = new List<string>
+        {
+            "mimeType != 'application/vnd.google-apps.folder'"
+        };
 
                 // Add search query if provided
                 if (!string.IsNullOrWhiteSpace(request.SearchQuery))
@@ -319,24 +325,29 @@ namespace Projects_Management_System_Naseej.Services
                     queryParts.Add($"name contains '{request.SearchQuery}'");
                 }
 
-                // Exclude specific folders or file types if needed
-                queryParts.Add("mimeType != 'application/vnd.google-apps.folder'");
-
                 // Combine query parts
-                if (queryParts.Any())
-                {
-                    listRequest.Q = string.Join(" and ", queryParts);
-                }
+                listRequest.Q = string.Join(" and ", queryParts);
 
                 // Pagination
-                listRequest.PageToken = request.PageNumber > 1
-                    ? CalculatePageToken(request.PageNumber, request.PageSize)
-                    : null;
+                if (request.PageNumber > 1)
+                {
+                    listRequest.PageToken = CalculatePageToken(request.PageNumber, request.PageSize);
+                }
 
                 // Execute the request
                 var result = await listRequest.ExecuteAsync();
 
-                return result.Files.ToList();
+                // Map to DTO
+                return result.Files.Select(file => new GoogleDriveFileDto
+                {
+                    Id = file.Id,
+                    Name = file.Name,
+                    MimeType = file.MimeType,
+                    CreatedTime = file.CreatedTime,
+                    Size = file.Size ?? 0,
+                    WebViewLink = file.WebViewLink,
+                    FileExtension = Path.GetExtension(file.Name)
+                }).ToList();
             }
             catch (Exception ex)
             {
@@ -344,17 +355,21 @@ namespace Projects_Management_System_Naseej.Services
                 throw;
             }
         }
+
         public async Task<int> GetTotalFileCountAsync(string searchQuery = null)
         {
             try
             {
-                var listRequest = _driveService.Files.List();
+                // Use the actual drive service, not the injected one
+                var driveService = await GetDriveServiceAsync();
+
+                var listRequest = driveService.Files.List();
 
                 // Build query parts
                 var queryParts = new List<string>
-            {
-                "mimeType != 'application/vnd.google-apps.folder'"
-            };
+        {
+            "mimeType != 'application/vnd.google-apps.folder'"
+        };
 
                 // Add search query if provided
                 if (!string.IsNullOrWhiteSpace(searchQuery))
@@ -376,11 +391,12 @@ namespace Projects_Management_System_Naseej.Services
                 throw;
             }
         }
+
         private string CalculatePageToken(int pageNumber, int pageSize)
         {
-            // Implement logic to generate page token based on page number and size
-            // This might involve keeping track of previous page tokens or using a cursor-based approach
-            return null; // Placeholder
+            // This is a placeholder. In a real-world scenario, 
+            // you'd need to implement proper pagination token management
+            return null;
         }
         public async Task<List<Google.Apis.Drive.v3.Data.File>> FilterFilesAsync(GoogleDriveFilterRequest filters)
 {
@@ -435,17 +451,40 @@ namespace Projects_Management_System_Naseej.Services
             }
         }
 
+
+        // In your GoogleDriveService class, add this method:
         public async Task DeleteFileAsync(string fileId)
         {
             try
             {
                 var driveService = await GetDriveServiceAsync();
-                await driveService.Files.Delete(fileId).ExecuteAsync();
+
+                // Soft delete (move to trash)
+                var request = driveService.Files.Delete(fileId);
+                await request.ExecuteAsync();
+
+                // Optional: Permanent deletion
+                // var request = driveService.Files.Delete(fileId);
+                // request.Permanently = true; // Permanently delete
+                // await request.ExecuteAsync();
             }
-            catch (Exception ex)
+            catch (GoogleApiException ex)
             {
-                _logger.LogError(ex, $"Error deleting file {fileId}");
-                throw;
+                // Handle specific Google Drive API exceptions
+                switch (ex.HttpStatusCode)
+                {
+                    case System.Net.HttpStatusCode.NotFound:
+                        _logger.LogWarning($"File {fileId} not found in Google Drive");
+                        throw new FileNotFoundException($"File {fileId} not found", ex);
+
+                    case System.Net.HttpStatusCode.Forbidden:
+                        _logger.LogError($"Unauthorized to delete file {fileId}");
+                        throw new UnauthorizedAccessException("Insufficient permissions to delete file", ex);
+
+                    default:
+                        _logger.LogError(ex, $"Error deleting file {fileId}");
+                        throw;
+                }
             }
         }
         public string GetMimeType(string fileName)

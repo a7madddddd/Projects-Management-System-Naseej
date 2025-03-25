@@ -124,7 +124,7 @@ namespace Projects_Management_System_Naseej.Controllers
             };
 
             // Optional: Add specific parameters
-            properties.Items["prompt"] = "select_account"; // Force account selection
+            properties.Items["prompt"] = "filesnaseej@gmail.com"; // Force account selection
 
             return Challenge(properties, GoogleDefaults.AuthenticationScheme);
         }
