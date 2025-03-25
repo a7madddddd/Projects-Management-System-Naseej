@@ -198,7 +198,74 @@ class FileRenderer {
         return Math.round(bytes / Math.pow(1024, i), 2) + ' ' + sizes[i];
     }
 }
+class DocumentCounter {
+    constructor() {
+        this.baseUrl = 'https://localhost:44320/api';
+        this.token = sessionStorage.getItem('authToken');
+    }
 
+    getHeaders() {
+        return {
+            'Authorization': `Bearer ${this.token}`,
+            'Content-Type': 'application/json'
+        };
+    }
+
+    async updateDocumentCount() {
+        try {
+            const response = await fetch(`${this.baseUrl}/Files/documents-count`, {
+                method: 'GET',
+                headers: this.getHeaders()
+            });
+
+            if (!response.ok) {
+                throw new Error('Failed to fetch document count');
+            }
+
+            const data = await response.json();
+
+            // Update the badge in the documents tab
+            const documentCountBadge = document.querySelector('.nav-tabs .badge');
+            if (documentCountBadge) {
+                documentCountBadge.textContent = data.totalDocuments;
+            }
+
+            // Update the documents header
+            const documentsHeader = document.querySelector('[data-documents-count]');
+            if (documentsHeader) {
+                documentsHeader.textContent = `Documents ${data.totalDocuments}`;
+            }
+
+            return data.totalDocuments;
+        } catch (error) {
+            console.error('Error updating document count:', error);
+            return 0;
+        }
+    }
+}
+
+// Global function to update document count
+function updateDocumentCount() {
+    const documentCounter = new DocumentCounter();
+    documentCounter.updateDocumentCount();
+}
+
+// Initialize document count on page load
+document.addEventListener('DOMContentLoaded', () => {
+    const documentCounter = new DocumentCounter();
+    documentCounter.updateDocumentCount();
+});
+
+// Initialize and update document count when page loads
+document.addEventListener('DOMContentLoaded', () => {
+    const documentCounter = new DocumentCounter();
+    documentCounter.updateDocumentCount();
+
+    // Optionally, update count after file operations
+    window.updateDocumentCount = () => {
+        documentCounter.updateDocumentCount();
+    };
+});
 // Global action handlers
 async function viewFileDetails(googleDriveFileId) {
     // Only proceed if googleDriveFileId is not null
@@ -382,7 +449,7 @@ class FileActionService {
 
                 // Refresh file list if function exists
                 if (typeof initializeFileTable === 'function') {
-                    initializeFileTable();
+                    initializeFileTable(), updateDocumentCount()    ;
                 }
 
                 return deleteResult;
@@ -492,33 +559,113 @@ async function initializeFileTable() {
 // Initialize on page load
 document.addEventListener('DOMContentLoaded', initializeFileTable);
 
+class CategoryService {
+    constructor() {
+        this.baseUrl = 'https://localhost:44320/api';
+        this.token = sessionStorage.getItem('authToken');
+    }
+
+    getHeaders() {
+        return {
+            'Authorization': `Bearer ${this.token}`,
+            'Accept': 'application/json'
+        };
+    }
+
+    async fetchCategories() {
+        try {
+            const response = await fetch(`${this.baseUrl}/FileCategories`, {
+                method: 'GET',
+                headers: this.getHeaders()
+            });
+
+            if (!response.ok) {
+                throw new Error('Failed to fetch categories');
+            }
+
+            return await response.json();
+        } catch (error) {
+            console.error('Error fetching categories:', error);
+            throw error;
+        }
+    }
+
+    populateCategoryDropdown(selectElement) {
+        this.fetchCategories()
+            .then(categories => {
+                // Sort categories: active first, then by name
+                const sortedCategories = categories.sort((a, b) => {
+                    if (a.isActive && !b.isActive) return -1;
+                    if (!a.isActive && b.isActive) return 1;
+                    return a.categoryName.localeCompare(b.categoryName);
+                });
+
+                // Clear existing options
+                selectElement.innerHTML = '<option value="">Select Category</option>';
+
+                // Populate categories
+                sortedCategories.forEach(category => {
+                    const option = document.createElement('option');
+                    option.value = category.categoryId;
+
+                    // Create display text with additional information
+                    let displayText = category.categoryName;
+                    if (!category.isActive) {
+                        displayText += ' (Inactive)';
+                        option.disabled = true;
+                    }
+
+                    // Add description if available
+                    if (category.description) {
+                        displayText += ` - ${category.description}`;
+                    }
+
+                    option.textContent = displayText;
+
+                    // Optional: Add custom data attributes
+                    option.dataset.isActive = category.isActive;
+                    option.dataset.description = category.description || '';
+
+                    selectElement.appendChild(option);
+                });
+            })
+            .catch(error => {
+                console.error('Error populating categories:', error);
+                Swal.fire({
+                    icon: 'error',
+                    title: 'Category Error',
+                    text: 'Failed to load categories. Please try again.'
+                });
+            });
+    }
+}
+
 class FileUploadService {
     constructor() {
         this.baseUrl = 'https://localhost:44320/api';
         this.token = sessionStorage.getItem('authToken');
     }
 
-    // Get authentication headers
     getHeaders() {
         return {
             'Authorization': `Bearer ${this.token}`
         };
     }
 
-    // Upload file to drive
-    async uploadFileToDrive(file) {
+    async uploadFileToDrive(file, categoryId) {
         const formData = new FormData();
         formData.append('file', file);
 
+        const url = `${this.baseUrl}/Files/upload-to-drive?categoryId=${categoryId}`;
+
         try {
-            const response = await fetch(`${this.baseUrl}/Files/upload-to-drive`, {
+            const response = await fetch(url, {
                 method: 'POST',
                 headers: this.getHeaders(),
                 body: formData
             });
 
             if (!response.ok) {
-                // Try to parse error response
                 let errorText = 'File upload failed';
                 try {
                     const errorResponse = await response.json();
@@ -537,35 +684,61 @@ class FileUploadService {
         }
     }
 }
-
+    
 class FileUploadHandler {
     constructor() {
         this.uploadService = new FileUploadService();
+        this.categoryService = new CategoryService();
+        this.selectedCategory = null;
         this.initEventListeners();
     }
 
     initEventListeners() {
-        // Use specific IDs for reliable selection
+        const categorySelect = document.getElementById('categorySelect');
         const fileInput = document.getElementById('fileUploadInput');
         const uploadButton = document.getElementById('uploadFileButton');
 
+        // Populate categories
+        if (categorySelect) {
+            this.categoryService.populateCategoryDropdown(categorySelect);
+
+            // Category selection listener
+            categorySelect.addEventListener('change', (e) => {
+                this.selectedCategory = e.target.value;
+
+                // Enable file input when a category is selected
+                if (this.selectedCategory) {
+                    fileInput.disabled = false;
+                } else {
+                    fileInput.disabled = true;
+                }
+            });
+        }
+
+        // File input listener
         if (fileInput && uploadButton) {
-            // Add change event listener to the file input
+            // Initially disable file input
+            fileInput.disabled = true;
+
             fileInput.addEventListener('change', (e) => this.handleFileSelection(e));
 
-            // Add click event to button to trigger file input
             uploadButton.addEventListener('click', () => {
-                fileInput.click();
+                // Only allow file selection if a category is selected
+                if (this.selectedCategory) {
+                    fileInput.click();
+                } else {
+                    Swal.fire({
+                        icon: 'warning',
+                        title: 'Select Category',
+                        text: 'Please select a category before uploading files.'
+                    });
+                }
             });
         } else {
-            console.error('File upload elements not found', {
-                fileInputFound: !!fileInput,
-                uploadButtonFound: !!uploadButton
-            });
+            console.error('File upload elements not found');
         }
     }
 
-    // Validate files before upload
     validateFiles(files) {
         const allowedTypes = [
             'application/pdf',
@@ -599,9 +772,13 @@ class FileUploadHandler {
 
     async handleFileSelection(event) {
         const files = event.target.files;
-        if (files.length === 0) return;
+        if (files.length === 0 || !this.selectedCategory) return;
 
         try {
+            // Get selected category name
+            const categorySelect = document.getElementById('categorySelect');
+            const categoryName = categorySelect.options[categorySelect.selectedIndex].text;
+
             // Validate files
             const validFiles = this.validateFiles(files);
 
@@ -617,7 +794,10 @@ class FileUploadHandler {
             // Confirm upload with SweetAlert
             const result = await Swal.fire({
                 title: 'Upload Files',
-                text: `Are you sure you want to upload ${validFiles.length} file(s) to Google Drive?`,
+                html: `
+                    Are you sure you want to upload ${validFiles.length} file(s)?
+                    <br>Category: ${categoryName}
+                `,
                 icon: 'question',
                 showCancelButton: true,
                 confirmButtonText: 'Yes, upload!',
@@ -645,7 +825,7 @@ class FileUploadHandler {
 
         try {
             const uploadPromises = files.map(file =>
-                this.uploadService.uploadFileToDrive(file)
+                this.uploadService.uploadFileToDrive(file, this.selectedCategory)
             );
 
             const results = await Promise.allSettled(uploadPromises);
@@ -681,6 +861,14 @@ class FileUploadHandler {
                 if (typeof initializeFileTable === 'function') {
                     initializeFileTable();
                 }
+                if (typeof updateDocumentCount === 'function') {
+                    updateDocumentCount();
+                }
+
+                // Reset file input and category selection
+                document.getElementById('fileUploadInput').value = '';
+                document.getElementById('categorySelect').selectedIndex = 0;
+                this.selectedCategory = null;
             } else {
                 throw new Error('No files were uploaded successfully');
             }
@@ -698,6 +886,26 @@ class FileUploadHandler {
         });
     }
 }
+
+// Initialize file upload handler
+document.addEventListener('DOMContentLoaded', () => {
+    // Ensure the file input exists before initializing
+    const fileInput = document.getElementById('fileUploadInput');
+    const uploadButton = document.getElementById('uploadFileButton');
+    const categorySelect = document.getElementById('categorySelect');
+
+    if (fileInput && uploadButton && categorySelect) {
+        new FileUploadHandler();
+    } else {
+        console.error('File upload elements not found', {
+            fileInput: !!fileInput,
+            uploadButton: !!uploadButton,
+            categorySelect: !!categorySelect
+        });
+    }
+});
+
+
 
 // Initialize file upload handler
 document.addEventListener('DOMContentLoaded', () => {

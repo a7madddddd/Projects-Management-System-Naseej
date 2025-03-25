@@ -895,22 +895,31 @@
                     </div><!--end row-->
                     <div class="row justify-content-center">
                         <div class="col-12">
-                            <div class="clearfix">
-                                <div class="btn-group float-end ms-2">
-                                    <button type="button" class="btn btn-secondary me-0 overflow-hidden" id="uploadFileButton">
-                                        Upload File
-                                        <input type="file" name="file" id="fileUploadInput" style="display:none;" multiple
-                                            class="overflow-hidden position-absolute top-0 start-0 opacity-0" />
-                                    </button>
-                                  
-                                 
-                                </div>
-                                <ul class="nav nav-tabs my-4" role="tablist">
-                                    <li class="nav-item">
-                                        <a class="nav-link fw-semibold active py-2" data-bs-toggle="tab" href="#documents" role="tab" aria-selected="true"><i class="fa-regular fa-folder-open me-1"></i> Documents <span class="badge rounded text-blue bg-blue-subtle ms-1">32</span></a>
-                                    </li>
-                                </ul>
-                            </div>
+                <div class="clearfix"><div class="mb-3">
+                    <label for="categorySelect" class="form-label">Select Category</label>
+                    <select id="categorySelect" class="form-select">
+                        <option value="">Select Category</option>
+                    </select>
+                </div>
+
+                    <div class="btn-group float-end ms-2">
+                        
+                        <button type="button" class="btn btn-secondary me-0 overflow-hidden" id="uploadFileButton">
+                            Upload File
+                            <input type="file" name="file" id="fileUploadInput" style="display:none;" multiple
+                                class="overflow-hidden position-absolute top-0 start-0 opacity-0" />
+                        </button>
+                    </div>
+                    <ul class="nav nav-tabs my-4" role="tablist">
+                        <li class="nav-item">
+                            <a class="nav-link fw-semibold active py-2" data-bs-toggle="tab" href="#documents" role="tab"
+                                aria-selected="true">
+                                <i class="fa-regular fa-folder-open me-1"></i>
+                                <span data-documents-count >Documents 0</span>
+                            </a>
+                        </li>
+                    </ul>
+                </div>
                             
                             <div class="card">
                                 <div class="card-header">

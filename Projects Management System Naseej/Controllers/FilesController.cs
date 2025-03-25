@@ -1112,7 +1112,9 @@ namespace Projects_Management_System_Naseej.Controllers
 
 
         [HttpPost("upload-to-drive")]
-        public async Task<IActionResult> UploadToDrive(IFormFile file)
+        public async Task<IActionResult> UploadToDrive(
+          IFormFile file,
+          [FromQuery] int? categoryId = null)
         {
             try
             {
@@ -1120,6 +1122,18 @@ namespace Projects_Management_System_Naseej.Controllers
                 if (file == null || file.Length == 0)
                 {
                     return BadRequest(new { message = "No file uploaded" });
+                }
+
+                // Optional: Validate category if provided
+                if (categoryId.HasValue)
+                {
+                    var categoryExists = await _context.FileCategories
+                        .AnyAsync(c => c.CategoryId == categoryId.Value );
+
+                    if (!categoryExists)
+                    {
+                        return BadRequest(new { message = "Invalid or inactive category" });
+                    }
                 }
 
                 // Validate authentication first
@@ -1136,7 +1150,11 @@ namespace Projects_Management_System_Naseej.Controllers
                 memoryStream.Position = 0;
 
                 // Upload to Google Drive
-                string googleDriveFileId = await UploadToGoogleDrive(memoryStream, sanitizedFileName);
+                string googleDriveFileId = await _googleDriveService.UploadFileAsync(
+                    memoryStream,
+                    sanitizedFileName,
+                    GetMimeType(sanitizedFileName)
+                );
 
                 // Reset stream position
                 memoryStream.Position = 0;
@@ -1156,7 +1174,8 @@ namespace Projects_Management_System_Naseej.Controllers
                     IsSyncedWithGoogleDrive = true,
                     UploadedBy = currentUserId,
                     IsActive = true,
-                    IsPublic = false
+                    IsPublic = false,
+                    CategoryId = categoryId // Add category ID
                 };
 
                 _context.Files.Add(fileEntity);
@@ -1167,21 +1186,8 @@ namespace Projects_Management_System_Naseej.Controllers
                     message = "File uploaded successfully",
                     fileName = sanitizedFileName,
                     googleDriveFileId = googleDriveFileId,
-                    localFilePath = localFilePath
-                });
-            }
-            catch (UnauthorizedAccessException ex)
-            {
-                _logger.LogWarning(ex, "Unauthorized file upload attempt");
-                return Unauthorized("You must be logged in to upload files");
-            }
-            catch (DbUpdateException ex)
-            {
-                _logger.LogError(ex, "Database error during file upload");
-                return StatusCode(500, new
-                {
-                    message = "Database error occurred",
-                    details = ex.InnerException?.Message
+                    localFilePath = localFilePath,
+                    categoryId = categoryId
                 });
             }
             catch (Exception ex)
@@ -1194,72 +1200,7 @@ namespace Projects_Management_System_Naseej.Controllers
                     innerException = ex.InnerException?.Message
                 });
             }
-        }  // Validate file method
-        private void ValidateFile(IFormFile file)
-        {
-            // Check file extension
-            string[] allowedExtensions = {
-                ".pdf", ".docx", ".xlsx", ".pptx",
-                ".doc", ".xls", ".ppt", ".txt",
-                ".csv", ".jpg", ".jpeg", ".png"
-            };
-
-            string extension = Path.GetExtension(file.FileName).ToLowerInvariant();
-            if (!allowedExtensions.Contains(extension))
-            {
-                throw new ArgumentException($"File type {extension} is not allowed.");
-            }
-
-            // Check file size (e.g., max 50 MB)
-            long maxFileSize = 50 * 1024 * 1024; // 50 MB
-            if (file.Length > maxFileSize)
-            {
-                throw new ArgumentException($"File size exceeds the maximum allowed size of {maxFileSize / (1024 * 1024)} MB.");
-            }
         }
-
-        private async Task<string> UploadToGoogleDrive(Stream fileStream, string fileName)
-        {
-            try
-            {
-                // Ensure stream is at the beginning
-                fileStream.Position = 0;
-
-                string mimeType = GetMimeType(fileName);
-
-                _logger.LogInformation($"Attempting to upload {fileName} to Google Drive");
-                _logger.LogInformation($"MIME Type: {mimeType}");
-                _logger.LogInformation($"Stream Length: {fileStream.Length}");
-
-                string googleDriveFileId = await _googleDriveService.UploadFileAsync(
-                    fileStream,
-                    fileName,
-                    mimeType
-                );
-
-                _logger.LogInformation($"Successfully uploaded {fileName} to Google Drive. File ID: {googleDriveFileId}");
-
-                return googleDriveFileId;
-            }
-            catch (Exception ex)
-            {
-                _logger.LogError(ex, $"Detailed Google Drive upload error for {fileName}");
-
-                // Log specific details about the exception
-                _logger.LogError($"Exception Type: {ex.GetType().FullName}");
-                _logger.LogError($"Exception Message: {ex.Message}");
-
-                // If there's an inner exception, log its details
-                if (ex.InnerException != null)
-                {
-                    _logger.LogError($"Inner Exception Type: {ex.InnerException.GetType().FullName}");
-                    _logger.LogError($"Inner Exception Message: {ex.InnerException.Message}");
-                }
-
-                throw; // Re-throw to maintain original stack trace
-            }
-        }
-
 
 
 
@@ -1430,8 +1371,25 @@ namespace Projects_Management_System_Naseej.Controllers
                 return StatusCode(500, "An error occurred while updating file in Google Drive");
             }
         }
+        [HttpGet("documents-count")]
+        public async Task<IActionResult> GetDocumentsCount()
+        {
+            try
+            {
+                // Get total count of files from Google Drive
+                var totalCount = await _googleDriveService.GetTotalFileCountAsync();
 
-
+                return Ok(new
+                {
+                    totalDocuments = totalCount
+                });
+            }
+            catch (Exception ex)
+            {
+                _logger.LogError(ex, "Error retrieving documents count");
+                return StatusCode(500, new { message = "An error occurred while retrieving documents count" });
+            }
+        }
 
         [HttpDelete("delete-file/{fileId}")]
         public async Task<IActionResult> DeleteFileFromGoogleDrive(string fileId)

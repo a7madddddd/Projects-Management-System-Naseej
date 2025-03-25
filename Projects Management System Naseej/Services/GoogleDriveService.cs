@@ -124,187 +124,187 @@ namespace Projects_Management_System_Naseej.Services
             }
         }
 
-        public async Task<string> UploadFileAsync(Stream fileStream, string fileName, string? mimeType = null)
-        {
-            try
+            public async Task<string> UploadFileAsync(Stream fileStream, string fileName, string? mimeType = null)
             {
-                // Validate inputs
-                if (fileStream == null)
-                    throw new ArgumentNullException(nameof(fileStream), "File stream cannot be null");
-
-                if (string.IsNullOrEmpty(fileName))
-                    throw new ArgumentNullException(nameof(fileName), "Filename cannot be empty");
-
-                // Ensure stream is at the beginning
-                fileStream.Position = 0;
-
-                // Determine MIME type if not provided
-                if (string.IsNullOrEmpty(mimeType))
+                try
                 {
-                    mimeType = GetMimeType(fileName);
+                    // Validate inputs
+                    if (fileStream == null)
+                        throw new ArgumentNullException(nameof(fileStream), "File stream cannot be null");
+
+                    if (string.IsNullOrEmpty(fileName))
+                        throw new ArgumentNullException(nameof(fileName), "Filename cannot be empty");
+
+                    // Ensure stream is at the beginning
+                    fileStream.Position = 0;
+
+                    // Determine MIME type if not provided
+                    if (string.IsNullOrEmpty(mimeType))
+                    {
+                        mimeType = GetMimeType(fileName);
+                    }
+
+                    // Get Drive service
+                    var driveService = await GetDriveServiceAsync();
+
+                    // Prepare file metadata
+                    var fileMetadata = new Google.Apis.Drive.v3.Data.File()
+                    {
+                        Name = fileName,
+                        MimeType = mimeType
+                    };
+
+                    // Create request
+                    var request = driveService.Files.Create(fileMetadata, fileStream, mimeType);
+                    request.Fields = "id";
+
+                    // Upload file
+                    var uploadResult = await request.UploadAsync();
+
+                    // Check upload status
+                    if (uploadResult.Status == UploadStatus.Failed)
+                    {
+                        throw new Exception($"Upload failed: {uploadResult.Exception?.Message ?? "Unknown error"}");
+                    }
+
+                    // Return file ID
+                    return request.ResponseBody?.Id ??
+                           throw new InvalidOperationException("File upload succeeded, but no file ID was returned");
                 }
-
-                // Get Drive service
-                var driveService = await GetDriveServiceAsync();
-
-                // Prepare file metadata
-                var fileMetadata = new Google.Apis.Drive.v3.Data.File()
+                catch (Exception ex)
                 {
-                    Name = fileName,
-                    MimeType = mimeType
-                };
-
-                // Create request
-                var request = driveService.Files.Create(fileMetadata, fileStream, mimeType);
-                request.Fields = "id";
-
-                // Upload file
-                var uploadResult = await request.UploadAsync();
-
-                // Check upload status
-                if (uploadResult.Status == UploadStatus.Failed)
-                {
-                    throw new Exception($"Upload failed: {uploadResult.Exception?.Message ?? "Unknown error"}");
-                }
-
-                // Return file ID
-                return request.ResponseBody?.Id ??
-                       throw new InvalidOperationException("File upload succeeded, but no file ID was returned");
-            }
-            catch (Exception ex)
-            {
-                _logger.LogError(ex, $"Error uploading file {fileName} to Google Drive");
-                throw;
-            }
-        }
-
-        public async Task<Stream> DownloadFileAsync(string fileId)
-        {
-            try
-            {
-                var driveService = await GetDriveServiceAsync();
-
-                var request = driveService.Files.Get(fileId);
-                var stream = new MemoryStream();
-                await request.DownloadAsync(stream);
-                stream.Position = 0;
-                return stream;
-            }
-            catch (Exception ex)
-            {
-                _logger.LogError(ex, $"Error downloading file {fileId} from Google Drive");
-                throw;
-            }
-        }
-
-        public async Task<string> GetFileWebViewLink(string fileId)
-        {
-            try
-            {
-                var driveService = await GetDriveServiceAsync();
-
-                // Specify the fields you want to retrieve
-                var request = driveService.Files.Get(fileId);
-                request.Fields = "id, name, webViewLink, sharingUser, permissions"; // Request specific fields
-
-                var file = await request.ExecuteAsync();
-
-                // Check if WebViewLink exists
-                if (string.IsNullOrEmpty(file.WebViewLink))
-                {
-                    // Try to create a sharing link if one doesn't exist
-                    return await CreateSharingLink(driveService, fileId);
-                }
-
-                return file.WebViewLink;
-            }
-            catch (GoogleApiException ex) when (ex.HttpStatusCode == System.Net.HttpStatusCode.NotFound)
-            {
-                _logger.LogWarning($"File not found: {fileId}");
-                throw new FileNotFoundException($"File with ID {fileId} not found in Google Drive", ex);
-            }
-            catch (GoogleApiException ex) when (ex.HttpStatusCode == System.Net.HttpStatusCode.Unauthorized)
-            {
-                _logger.LogError(ex, $"Unauthorized access getting web view link for file {fileId}");
-                throw new UnauthorizedAccessException("Failed to authenticate with Google Drive", ex);
-            }
-            catch (Exception ex)
-            {
-                _logger.LogError(ex, $"Error getting web view link for file {fileId}");
-                throw;
-            }
-        }
-
-        private async Task<string> CreateSharingLink(DriveService driveService, string fileId)
-        {
-            try
-            {
-                // Create a permission for anyone with the link
-                var permission = new Google.Apis.Drive.v3.Data.Permission
-                {
-                    Type = "anyone",
-                    Role = "reader"
-                };
-
-                // Create the permission
-                var permissionRequest = driveService.Permissions.Create(permission, fileId);
-                await permissionRequest.ExecuteAsync();
-
-                // Retrieve the updated file to get the web view link
-                var fileRequest = driveService.Files.Get(fileId);
-                fileRequest.Fields = "webViewLink";
-                var updatedFile = await fileRequest.ExecuteAsync();
-
-                return updatedFile.WebViewLink;
-            }
-            catch (GoogleApiException ex)
-            {
-                _logger.LogError(ex, $"Error creating sharing link for file {fileId}");
-
-                // More specific error handling
-                switch (ex.HttpStatusCode)
-                {
-                    case System.Net.HttpStatusCode.Forbidden:
-                        throw new UnauthorizedAccessException("Insufficient permissions to create sharing link", ex);
-                    case System.Net.HttpStatusCode.NotFound:
-                        throw new FileNotFoundException($"File {fileId} not found", ex);
-                    default:
-                        throw;
+                    _logger.LogError(ex, $"Error uploading file {fileName} to Google Drive");
+                    throw;
                 }
             }
-            catch (Exception ex)
+
+            public async Task<Stream> DownloadFileAsync(string fileId)
             {
-                _logger.LogError(ex, $"Unexpected error creating sharing link for file {fileId}");
-                throw;
-            }
-        }
-        public async Task<string> UpdateFileAsync(string fileId, Stream fileStream, string mimeType)
-        {
-            try
-            {
-                var driveService = await GetDriveServiceAsync();
-
-                var fileMetadata = new Google.Apis.Drive.v3.Data.File();
-
-                var request = driveService.Files.Update(fileMetadata, fileId, fileStream, mimeType);
-                request.Fields = "id";
-
-                var uploadResult = await request.UploadAsync();
-
-                if (uploadResult.Status == UploadStatus.Failed)
+                try
                 {
-                    throw new Exception($"Update failed: {uploadResult.Exception?.Message ?? "Unknown error"}");
-                }
+                    var driveService = await GetDriveServiceAsync();
 
-                return request.ResponseBody?.Id ??
-                       throw new InvalidOperationException("File update succeeded, but no file ID was returned");
+                    var request = driveService.Files.Get(fileId);
+                    var stream = new MemoryStream();
+                    await request.DownloadAsync(stream);
+                    stream.Position = 0;
+                    return stream;
+                }
+                catch (Exception ex)
+                {
+                    _logger.LogError(ex, $"Error downloading file {fileId} from Google Drive");
+                    throw;
+                }
             }
-            catch (Exception ex)
+
+            public async Task<string> GetFileWebViewLink(string fileId)
             {
-                _logger.LogError(ex, $"Error updating file {fileId} in Google Drive");
-                throw;
+                try
+                {
+                    var driveService = await GetDriveServiceAsync();
+
+                    // Specify the fields you want to retrieve
+                    var request = driveService.Files.Get(fileId);
+                    request.Fields = "id, name, webViewLink, sharingUser, permissions"; // Request specific fields
+
+                    var file = await request.ExecuteAsync();
+
+                    // Check if WebViewLink exists
+                    if (string.IsNullOrEmpty(file.WebViewLink))
+                    {
+                        // Try to create a sharing link if one doesn't exist
+                        return await CreateSharingLink(driveService, fileId);
+                    }
+
+                    return file.WebViewLink;
+                }
+                catch (GoogleApiException ex) when (ex.HttpStatusCode == System.Net.HttpStatusCode.NotFound)
+                {
+                    _logger.LogWarning($"File not found: {fileId}");
+                    throw new FileNotFoundException($"File with ID {fileId} not found in Google Drive", ex);
+                }
+                catch (GoogleApiException ex) when (ex.HttpStatusCode == System.Net.HttpStatusCode.Unauthorized)
+                {
+                    _logger.LogError(ex, $"Unauthorized access getting web view link for file {fileId}");
+                    throw new UnauthorizedAccessException("Failed to authenticate with Google Drive", ex);
+                }
+                catch (Exception ex)
+                {
+                    _logger.LogError(ex, $"Error getting web view link for file {fileId}");
+                    throw;
+                }
             }
-        }
+
+            private async Task<string> CreateSharingLink(DriveService driveService, string fileId)
+            {
+                try
+                {
+                    // Create a permission for anyone with the link
+                    var permission = new Google.Apis.Drive.v3.Data.Permission
+                    {
+                        Type = "anyone",
+                        Role = "reader"
+                    };
+
+                    // Create the permission
+                    var permissionRequest = driveService.Permissions.Create(permission, fileId);
+                    await permissionRequest.ExecuteAsync();
+
+                    // Retrieve the updated file to get the web view link
+                    var fileRequest = driveService.Files.Get(fileId);
+                    fileRequest.Fields = "webViewLink";
+                    var updatedFile = await fileRequest.ExecuteAsync();
+
+                    return updatedFile.WebViewLink;
+                }
+                catch (GoogleApiException ex)
+                {
+                    _logger.LogError(ex, $"Error creating sharing link for file {fileId}");
+
+                    // More specific error handling
+                    switch (ex.HttpStatusCode)
+                    {
+                        case System.Net.HttpStatusCode.Forbidden:
+                            throw new UnauthorizedAccessException("Insufficient permissions to create sharing link", ex);
+                        case System.Net.HttpStatusCode.NotFound:
+                            throw new FileNotFoundException($"File {fileId} not found", ex);
+                        default:
+                            throw;
+                    }
+                }
+                catch (Exception ex)
+                {
+                    _logger.LogError(ex, $"Unexpected error creating sharing link for file {fileId}");
+                    throw;
+                }
+            }
+            public async Task<string> UpdateFileAsync(string fileId, Stream fileStream, string mimeType)
+            {
+                try
+                {
+                    var driveService = await GetDriveServiceAsync();
+
+                    var fileMetadata = new Google.Apis.Drive.v3.Data.File();
+
+                    var request = driveService.Files.Update(fileMetadata, fileId, fileStream, mimeType);
+                    request.Fields = "id";
+
+                    var uploadResult = await request.UploadAsync();
+
+                    if (uploadResult.Status == UploadStatus.Failed)
+                    {
+                        throw new Exception($"Update failed: {uploadResult.Exception?.Message ?? "Unknown error"}");
+                    }
+
+                    return request.ResponseBody?.Id ??
+                           throw new InvalidOperationException("File update succeeded, but no file ID was returned");
+                }
+                catch (Exception ex)
+                {
+                    _logger.LogError(ex, $"Error updating file {fileId} in Google Drive");
+                    throw;
+                }
+            }
         public async Task<List<GoogleDriveFileDto>> ListFilesAsync(GoogleDriveListRequest request)
         {
             try
@@ -375,7 +375,6 @@ namespace Projects_Management_System_Naseej.Services
         {
             try
             {
-                // Use the actual drive service, not the injected one
                 var driveService = await GetDriveServiceAsync();
 
                 var listRequest = driveService.Files.List();
@@ -403,10 +402,9 @@ namespace Projects_Management_System_Naseej.Services
             catch (Exception ex)
             {
                 _logger.LogError(ex, "Error counting Google Drive files");
-                throw;
+                return 0;
             }
         }
-
         private string CalculatePageToken(int pageNumber, int pageSize)
         {
             // This is a placeholder. In a real-world scenario, 
