@@ -15,7 +15,7 @@ async function fetchCategories() {
         if (!response.ok) {
             // Handle unauthorized or forbidden errors
             if (response.status === 401 || response.status === 403) {
-                window.location.href = '/login';
+                window.location.href = 'auth-login.html';
                 return [];
             }
             throw new Error(`HTTP error! status: ${response.status}`);

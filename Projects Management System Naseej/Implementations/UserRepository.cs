@@ -91,7 +91,7 @@ namespace Projects_Management_System_Naseej.Implementations
                 PasswordHash = user.PasswordHash,
                 CreatedDate = user.CreatedDate ?? DateTime.MinValue,
                 UpdatedDate = user.UpdatedDate,
-                Roles = new List<string>() 
+                Roles = new List<string>()
             };
         }
 
@@ -123,7 +123,35 @@ namespace Projects_Management_System_Naseej.Implementations
                 Roles = user.UserRoleUsers.Select(ur => ur.Role.RoleName).ToList()
             };
         }
+        public async Task<bool> ResetPasswordAsync(int userId, string currentPasswordHash, string newPasswordHash)
+        {
+            var user = await _context.Users.FindAsync(userId);
 
+            if (user == null)
+            {
+                return false;
+            }
+
+            // Verify current password
+            if (user.PasswordHash != currentPasswordHash)
+            {
+                return false;
+            }
+
+            // Update password
+            user.PasswordHash = newPasswordHash;
+            user.UpdatedDate = DateTime.UtcNow;
+
+            try
+            {
+                await _context.SaveChangesAsync();
+                return true;
+            }
+            catch
+            {
+                return false;
+            }
+        }
         public async Task DeleteUserAsync(int userId)
         {
             var user = await _context.Users
@@ -182,7 +210,7 @@ namespace Projects_Management_System_Naseej.Implementations
                 userRole.RoleId = newRoleId;
 
                 await _context.SaveChangesAsync();
-                return true; 
+                return true;
             }
             catch (Exception ex)
             {
@@ -262,6 +290,27 @@ namespace Projects_Management_System_Naseej.Implementations
             {
                 var hashedBytes = sha256.ComputeHash(Encoding.UTF8.GetBytes(password));
                 return BitConverter.ToString(hashedBytes).Replace("-", "").ToLower();
+            }
+        }
+        public async Task<bool> UpdatePasswordAsync(int userId, string newPasswordHash)
+        {
+            var user = await _context.Users.FindAsync(userId);
+            if (user == null)
+            {
+                return false;
+            }
+
+            user.PasswordHash = newPasswordHash;
+            user.UpdatedDate = DateTime.UtcNow;
+
+            try
+            {
+                await _context.SaveChangesAsync();
+                return true;
+            }
+            catch
+            {
+                return false;
             }
         }
 
@@ -370,7 +419,15 @@ namespace Projects_Management_System_Naseej.Implementations
             }
         }
 
-
+        string IUserRepository.HashPassword(string password)
+        {
+            using (var sha256 = SHA256.Create())
+            {
+                var hashedBytes = sha256.ComputeHash(Encoding.UTF8.GetBytes(password));
+                return BitConverter.ToString(hashedBytes).Replace("-", "").ToLower();
+            }
+        }
     }
 }
+
 

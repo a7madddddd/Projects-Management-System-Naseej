@@ -16,5 +16,8 @@ namespace Projects_Management_System_Naseej.Repositories
         Task<UserDTO> GetUserByUsernameOrEmailAsync(string usernameOrEmail);
         Task<bool> UpdateUserRoleAsync(int userId, int oldRoleId, int newRoleId);
         Task<User> GetOrCreateUserFromGoogleAsync(string email, string name);
+        Task<bool> ResetPasswordAsync(int userId, string currentPasswordHash, string newPasswordHash);
+        string HashPassword(string password);
+
     }
 }
