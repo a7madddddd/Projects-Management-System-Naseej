@@ -1,6 +1,8 @@
 ﻿using Projects_Management_System_Naseej.Repositories;
-using System.Net.Mail;
 using System.Net;
+using System.Net.Mail;
+using System.Net.Security;
+using System.Security.Cryptography.X509Certificates;
 
 public class EmailService : IEmailService
 {
@@ -17,52 +19,45 @@ public class EmailService : IEmailService
     {
         try
         {
-            // Retrieve SMTP configuration from the correct path
-            var smtpHost = _configuration["Authorization:Smtp:Host"];
-            var smtpPort = _configuration["Authorization:Smtp:Port"];
-            var smtpUsername = _configuration["Authorization:Smtp:Username"];
-            var smtpPassword = _configuration["Authorization:Smtp:Password"];
-            var smtpFromEmail = _configuration["Authorization:Smtp:FromEmail"];
+            // Retrieve SMTP configuration
+            var smtpHost = _configuration["Smtp:Host"];
+            var smtpPort = _configuration["Smtp:Port"];
+            var smtpUsername = _configuration["Smtp:Username"];
+            var smtpPassword = _configuration["Smtp:Password"];
+            var smtpFromEmail = _configuration["Smtp:FromEmail"];
+
+            // Comprehensive configuration logging
+            _logger.LogInformation("SMTP Configuration Details:");
+            _logger.LogInformation($"Host: {smtpHost}");
+            _logger.LogInformation($"Port: {smtpPort}");
+            _logger.LogInformation($"Username: {smtpUsername}");
+            _logger.LogInformation($"From Email: {smtpFromEmail}");
 
             // Validate configuration
-            if (string.IsNullOrWhiteSpace(smtpHost))
+            if (string.IsNullOrWhiteSpace(smtpHost) ||
+                string.IsNullOrWhiteSpace(smtpPort) ||
+                string.IsNullOrWhiteSpace(smtpUsername) ||
+                string.IsNullOrWhiteSpace(smtpPassword) ||
+                string.IsNullOrWhiteSpace(smtpFromEmail))
             {
-                _logger.LogError("SMTP Host is not configured");
+                _logger.LogError("Incomplete SMTP configuration");
                 return false;
             }
 
-            if (!int.TryParse(smtpPort, out int port))
-            {
-                _logger.LogError($"Invalid SMTP Port: {smtpPort}");
-                return false;
-            }
-
-            if (string.IsNullOrWhiteSpace(smtpUsername))
-            {
-                _logger.LogError("SMTP Username is not configured");
-                return false;
-            }
-
-            if (string.IsNullOrWhiteSpace(smtpPassword))
-            {
-                _logger.LogError("SMTP Password is not configured");
-                return false;
-            }
-
-            if (string.IsNullOrWhiteSpace(smtpFromEmail))
-            {
-                _logger.LogError("SMTP From Email is not configured");
-                return false;
-            }
-
-            // Create SMTP client
+            // Create SMTP client with detailed configuration
             using (var smtpClient = new SmtpClient(smtpHost)
             {
-                Port = port,
+                Port = int.Parse(smtpPort),
                 Credentials = new NetworkCredential(smtpUsername, smtpPassword),
-                EnableSsl = true
+                EnableSsl = true,
+                DeliveryMethod = SmtpDeliveryMethod.Network,
+                Timeout = 20000 // 20 seconds timeout
             })
             {
+                // Optional: Add certificate validation callback
+                ServicePointManager.ServerCertificateValidationCallback =
+                    (sender, certificate, chain, sslPolicyErrors) => true;
+
                 // Prepare email message
                 var mailMessage = new MailMessage
                 {
@@ -73,58 +68,65 @@ public class EmailService : IEmailService
                         <body>
                             <h2>Password Reset</h2>
                             <p>Your One-Time Password (OTP) is:</p>
-                            <h3 style='color: blue;'>{otp}</h3>
+                            <h3 style='color: blue; font-size: 24px;'>{otp}</h3>
                             <p>This OTP will expire in 10 minutes.</p>
                             <p>If you did not request this password reset, please ignore this email.</p>
+                            <small>Sent from Naseej Password Reset System</small>
                         </body>
                         </html>",
-                    IsBodyHtml = true
+                    IsBodyHtml = true,
+                    Priority = MailPriority.High
                 };
                 mailMessage.To.Add(email);
 
-                // Send email
-                await smtpClient.SendMailAsync(mailMessage);
+                try
+                {
+                    // Send email with comprehensive error handling
+                    _logger.LogInformation($"Attempting to send email to {email}");
 
-                _logger.LogInformation($"OTP sent successfully to {email}");
-                return true;
+                    await Task.Run(() => smtpClient.Send(mailMessage));
+
+                    _logger.LogInformation($"Email sent successfully to {email}");
+                    return true;
+                }
+                catch (SmtpException smtpEx)
+                {
+                    _logger.LogError(smtpEx, $"SMTP Error sending email to {email}");
+                    _logger.LogError($"SMTP Status Code: {smtpEx.StatusCode}");
+                    _logger.LogError($"SMTP Error Message: {smtpEx.Message}");
+
+                    // Additional inner exception logging
+                    if (smtpEx.InnerException != null)
+                    {
+                        _logger.LogError($"Inner Exception: {smtpEx.InnerException.GetType().Name}");
+                        _logger.LogError($"Inner Exception Message: {smtpEx.InnerException.Message}");
+                    }
+
+                    return false;
+                }
+                catch (Exception ex)
+                {
+                    _logger.LogError(ex, $"Comprehensive error sending email to {email}");
+
+                    // Log all exception details
+                    _logger.LogError($"Exception Type: {ex.GetType().Name}");
+                    _logger.LogError($"Exception Message: {ex.Message}");
+
+                    // Log inner exception if exists
+                    if (ex.InnerException != null)
+                    {
+                        _logger.LogError($"Inner Exception Type: {ex.InnerException.GetType().Name}");
+                        _logger.LogError($"Inner Exception Message: {ex.InnerException.Message}");
+                    }
+
+                    return false;
+                }
             }
         }
         catch (Exception ex)
         {
-            // Comprehensive error logging
-            _logger.LogError(ex, $"Error sending OTP to {email}");
-
-            // Additional detailed logging
-            _logger.LogError($"Exception Type: {ex.GetType().Name}");
-            _logger.LogError($"Exception Message: {ex.Message}");
-
-            // Log inner exception if exists
-            if (ex.InnerException != null)
-            {
-                _logger.LogError($"Inner Exception Type: {ex.InnerException.GetType().Name}");
-                _logger.LogError($"Inner Exception Message: {ex.InnerException.Message}");
-            }
-
+            _logger.LogError(ex, $"Fatal error in email sending process for {email}");
             return false;
-        }
-    }
-
-    private void LogSmtpConfiguration()
-    {
-        try
-        {
-            _logger.LogInformation("SMTP Configuration Details:");
-            _logger.LogInformation($"Host: {_configuration["Authorization:Smtp:Host"]}");
-            _logger.LogInformation($"Port: {_configuration["Authorization:Smtp:Port"]}");
-            _logger.LogInformation($"From Email: {_configuration["Authorization:Smtp:FromEmail"]}");
-
-            // Mask sensitive information
-            var username = _configuration["Authorization:Smtp:Username"];
-            _logger.LogInformation($"Username: {(string.IsNullOrWhiteSpace(username) ? "NOT SET" : username.Substring(0, 2) + "***")}");
-        }
-        catch (Exception ex)
-        {
-            _logger.LogError(ex, "Error logging SMTP configuration");
         }
     }
 }

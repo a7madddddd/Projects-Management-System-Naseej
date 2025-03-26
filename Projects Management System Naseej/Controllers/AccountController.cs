@@ -332,7 +332,35 @@ namespace Projects_Management_System_Naseej.Controllers
             });
         }
 
+        [HttpGet("email-test")]
+        public async Task<IActionResult> TestEmailSending(string email)
+        {
+            try
+            {
+                // Generate a test OTP
+                string testOtp = OtpGenerator.GenerateOtp();
 
+                // Attempt to send email
+                bool result = await _emailService.SendPasswordResetOtpAsync(email, testOtp);
+
+                // Return detailed response
+                return Ok(new
+                {
+                    Success = result,
+                    Message = result ? "Email sent successfully" : "Email sending failed",
+                    Otp = testOtp // Only for testing, remove in production
+                });
+            }
+            catch (Exception ex)
+            {
+                _logger.LogError(ex, "Error in email test endpoint");
+                return StatusCode(500, new
+                {
+                    Success = false,
+                    Message = ex.Message
+                });
+            }
+        }
 
 
 
