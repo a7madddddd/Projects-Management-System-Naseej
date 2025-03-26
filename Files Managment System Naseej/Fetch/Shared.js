@@ -189,3 +189,194 @@ document.addEventListener('DOMContentLoaded', () => {
         });
     }
 });
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+document.addEventListener('DOMContentLoaded', function () {
+    const notificationContainer = document.querySelector('#All');
+    const notificationBadge = document.querySelector('.badge.bg-primary-subtle');
+    const viewAllNotificationsBtn = document.querySelector('.dropdown-item.text-center');
+
+    // Fetch recent files
+    function fetchRecentFiles() {
+        const token = sessionStorage.getItem('authToken');
+
+        fetch('https://localhost:44320/api/Files/list-files?PageNumber=1&PageSize=10', {
+            method: 'GET',
+            headers: {
+                'Authorization': `Bearer ${token}`,
+                'accept': '*/*'
+            }
+        })
+            .then(response => response.json())
+            .then(data => {
+                // Filter files from last 2 days
+                const twoDaysAgo = new Date();
+                twoDaysAgo.setDate(twoDaysAgo.getDate() - 2);
+
+                const recentFiles = data.files.filter(file => {
+                    const uploadDate = new Date(file.uploadDate);
+                    return uploadDate >= twoDaysAgo;
+                });
+
+                // Update notification badge
+                notificationBadge.textContent = recentFiles.length;
+
+                // Clear existing notifications
+                notificationContainer.innerHTML = '';
+
+                // Render recent files
+                recentFiles.forEach(file => {
+                    const notificationItem = createNotificationElement(file);
+                    notificationContainer.appendChild(notificationItem);
+                });
+
+                // Store notifications for view all functionality
+                localStorage.setItem('recentNotifications', JSON.stringify(recentFiles));
+            })
+            .catch(error => {
+                console.error('Error fetching notifications:', error);
+            });
+    }
+
+    // Create notification element
+    function createNotificationElement(file) {
+        const notificationItem = document.createElement('a');
+        notificationItem.href = '#';
+        notificationItem.className = 'dropdown-item py-3';
+
+        // Calculate time ago
+        const timeAgo = formatTimeAgo(new Date(file.uploadDate));
+
+        // Set notification content
+        notificationItem.innerHTML = `
+            <small class="float-end text-muted ps-2">${timeAgo}</small>
+            <div class="d-flex align-items-center">
+                <div class="flex-shrink-0 bg-primary-subtle text-primary thumb-md rounded-circle">
+                    <i class="${getFileIcon(file.fileExtension)} fs-4"></i>
+                </div>
+                <div class="flex-grow-1 ms-2 text-truncate">
+                    <h6 class="my-0 fw-normal text-dark fs-13">New File Uploaded</h6>
+                    <small class="text-muted mb-0">${file.fileName}</small>
+                </div>
+            </div>
+        `;
+
+        return notificationItem;
+    }
+
+    // Format time ago
+    function formatTimeAgo(date) {
+        const now = new Date();
+        const diffInMinutes = Math.round((now - date) / (1000 * 60));
+
+        if (diffInMinutes < 60) return `${diffInMinutes} min ago`;
+        if (diffInMinutes < 1440) return `${Math.floor(diffInMinutes / 60)} hours ago`;
+        return `${Math.floor(diffInMinutes / 1440)} days ago`;
+    }
+
+    // Get file icon based on extension
+    function getFileIcon(extension) {
+        const iconMap = {
+            '.pdf': 'fa-solid fa-file-pdf',
+            '.doc': 'fa-solid fa-file-word',
+            '.docx': 'fa-solid fa-file-word',
+            '.xls': 'fa-solid fa-file-excel',
+            '.xlsx': 'fa-solid fa-file-excel',
+            '.ppt': 'fa-solid fa-file-powerpoint',
+            '.pptx': 'fa-solid fa-file-powerpoint',
+            '.txt': 'fa-solid fa-file-alt',
+            '.jpg': 'fa-solid fa-file-image',
+            '.jpeg': 'fa-solid fa-file-image',
+            '.png': 'fa-solid fa-file-image',
+            'default': 'fa-solid fa-file'
+        };
+
+        return iconMap[extension] || iconMap['default'];
+    }
+
+    // View All Notifications Modal
+    function createNotificationsModal() {
+        // Create modal HTML
+        const modalHtml = `
+            <div class="modal fade" id="notificationsModal" tabindex="-1" aria-labelledby="notificationsModalLabel" aria-hidden="true">
+                <div class="modal-dialog modal-lg">
+                    <div class="modal-content">
+                        <div class="modal-header">
+                            <h5 class="modal-title" id="notificationsModalLabel">All Notifications</h5>
+                            <button type="button" class="btn-close" data-bs-dismiss="modal" aria-label="Close"></button>
+                        </div>
+                        <div class="modal-body">
+                            <table class="table table-striped">
+                                <thead>
+                                    <tr>
+                                        <th>File Type</th>
+                                        <th>File Name</th>
+                                        <th>Uploaded By</th>
+                                        <th>Upload Date</th>
+                                    </tr>
+                                </thead>
+                                <tbody id="notificationsTableBody">
+                                    <!-- Notifications will be inserted here -->
+                                </tbody>
+                            </table>
+                        </div>
+                    </div>
+                </div>
+            </div>
+        `;
+
+        // Append modal to body if not exists
+        if (!document.getElementById('notificationsModal')) {
+            const modalContainer = document.createElement('div');
+            modalContainer.innerHTML = modalHtml;
+            document.body.appendChild(modalContainer);
+        }
+
+        // Add event listener to view all button
+        viewAllNotificationsBtn.addEventListener('click', () => {
+            const notifications = JSON.parse(localStorage.getItem('recentNotifications') || '[]');
+            const tableBody = document.getElementById('notificationsTableBody');
+
+            // Clear previous entries
+            tableBody.innerHTML = '';
+
+            // Populate table
+            notifications.forEach(file => {
+                const row = document.createElement('tr');
+                row.innerHTML = `
+                    <td><i class="${getFileIcon(file.fileExtension)} me-2"></i>${file.fileExtension}</td>
+                    <td>${file.fileName}</td>
+                    <td>${file.uploadedByName}</td>
+                    <td>${formatTimeAgo(new Date(file.uploadDate))}</td>
+                `;
+                tableBody.appendChild(row);
+            });
+
+            // Show modal
+            const modal = new bootstrap.Modal(document.getElementById('notificationsModal'));
+            modal.show();
+        });
+    }
+
+    // Initial fetch
+    fetchRecentFiles();
+
+    // Create notifications modal
+    createNotificationsModal();
+
+    // Optional: Refresh every 5 minutes
+    setInterval(fetchRecentFiles, 5 * 60 * 1000);
+});

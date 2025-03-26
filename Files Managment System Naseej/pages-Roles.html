@@ -2,15 +2,15 @@
 <html lang="en" dir="ltr" data-startbar="light" data-bs-theme="light">
 
 
-<!-- Mirrored from mannatthemes.com/mifty/default/advanced-files.html by HTTrack Website Copier/3.x [XR&CO'2014], Mon, 17 Mar 2025 18:13:53 GMT -->
+<!-- Mirrored from mannatthemes.com/mifty/default/pages-blogs.html by HTTrack Website Copier/3.x [XR&CO'2014], Mon, 17 Mar 2025 18:14:21 GMT -->
 
 <head>
 
 
     <meta charset="utf-8" />
-    <title>Files | Naseej - Admin & Files Managment System</title>
+    <title>Roles | Naseej Files - Admin & Naseej Files System</title>
     <meta name="viewport" content="width=device-width, initial-scale=1, shrink-to-fit=no">
-    <meta content="Files | Naseej - Admin & Files Managment System" name="description" />
+    <meta content="Roles | Naseej Files - Admin & Naseej Files System" name="description" />
     <meta content="" name="author" />
     <meta http-equiv="X-UA-Compatible" content="IE=edge" />
 
@@ -23,9 +23,6 @@
     <link href="assets/css/bootstrap.min.css" rel="stylesheet" type="text/css" />
     <link href="assets/css/icons.min.css" rel="stylesheet" type="text/css" />
     <link href="assets/css/app.min.css" rel="stylesheet" type="text/css" />
-
-
-    <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/sweetalert2@11/dist/sweetalert2.min.css">
 
 </head>
 
@@ -92,7 +89,9 @@
                                 <div class="tab-content" id="myTabContent">
                                     <div class="tab-pane fade show active" id="All" role="tabpanel"
                                         aria-labelledby="all-tab" tabindex="0">
+
                                         <!-- item-->
+
                                         <!-- item-->
                                         <a href="#" class="dropdown-item py-3">
                                             <small class="float-end text-muted ps-2">40 min ago</small>
@@ -221,12 +220,12 @@
                                 <span>Users</span>
                             </a>
                         </li><!--end nav-item-->
-                            <li class="nav-item">
-                                <a class="nav-link" href="pages-Roles.html">
-                                    <i class="iconoir-lock menu-icon"></i> <!-- Secure Role -->
-                                    <span>Roles</span>
-                                </a>
-                            </li><!--end nav-item-->
+                        <li class="nav-item">
+                            <a class="nav-link" href="pages-Roles.html">
+                                <i class="iconoir-lock menu-icon"></i> <!-- Secure Role -->
+                                <span>Roles</span>
+                            </a>
+                        </li><!--end nav-item-->
 
 
 
@@ -293,296 +292,54 @@
                 <div class="row">
                     <div class="col-sm-12">
                         <div class="page-title-box d-md-flex justify-content-md-between align-items-center">
-                            <h4 class="page-title">Files</h4>
+                            <h4 class="page-title">Roles</h4>
                             <div class="">
                                 <ol class="breadcrumb mb-0">
                                     <li class="breadcrumb-item"><a href="#">Naseej Files</a>
                                     </li><!--end nav-item-->
-                                    <li class="breadcrumb-item"><a href="#">Files</a>
+                                    <li class="breadcrumb-item"><a href="#">Roles</a>
                                     </li><!--end nav-item-->
-                                    <li class="breadcrumb-item active">Manage Files</li>
                                 </ol>
                             </div>
                         </div><!--end page-title-box-->
                     </div><!--end col-->
                 </div><!--end row-->
                 <div class="row justify-content-center">
-                <div class="col-md-6 col-lg-3" id="googleDriveCard">
-                    <div class="card">
-                        <div class="card-body">
-                            <div class="dropdown float-end">
-                                <a href="#" class="text-muted fs-16 dropdown-toggle p-1" data-bs-toggle="dropdown" aria-haspopup="true"
-                                    aria-expanded="false">
-                                    <i class="fa-solid fa-ellipsis-vertical"></i>
-                                </a>
-                                <div class="dropdown-menu dropdown-menu-end">
-                                    <a class="dropdown-item" href="#">View Detail</a>
-                                    <a class="dropdown-item" href="#">Clear All</a>
-                                    <a class="dropdown-item" href="#">Delete</a>
-                                </div>
-                            </div>
-                            <img src="assets/images/logos/lang-logo/gdrive.png" class="me-2 align-self-center thumb-xl" alt="..."
-                                id="googleDriveLogo">
-                            <h5 class="fw-semibold mt-3 fs-14" id="googleDriveTitle">Google Drive</h5>
-                            <div class="d-flex justify-content-between my-2">
-                                <p class="text-muted mb-0 fs-13 fw-semibold">
-                                    <span class="text-dark" id="googleDriveFileCount">34</span> Files
-                                </p>
-                                <p class="text-muted mb-0 fs-13 fw-semibold">
-                                    <span class="text-dark" id="googleDriveStorageUsed">500</span> GB
-                                </p>
-                            </div>
-                            <div class="d-flex align-items-center">
-                                <div class="flex-grow-1 text-truncate">
-        <div class="d-flex align-items-center">
-            <div class="progress bg-secondary-subtle w-100" style="height:5px; background-color: #e9ecef;" role="progressbar"
-                aria-label="Storage Usage" aria-valuenow="0" aria-valuemin="0" aria-valuemax="100"
-                id="googleDriveProgressContainer">
-                <div class="progress-bar bg-secondary" style="width: 0%; background-color: #6c757d !important;"
-                    id="googleDriveProgressBar"></div>
-            </div>
-            <small class="flex-shrink-1 ms-1" id="googleDriveProgressPercentage">0%</small>
-        </div>
-                                </div><!--end media body-->
-                            </div><!--end media-->
-                        </div><!--end card-body-->
-                    </div><!--end card-->
-                </div> <!--end col-->
-                    <div class="col-md-6 col-lg-3">
+                    <div class="col-md-6 col-lg-4">
                         <div class="card">
                             <div class="card-body">
-                                <div class="dropdown float-end">
-                                    <a href="#" class="text-muted fs-16 dropdown-toggle p-1" data-bs-toggle="dropdown"
-                                        aria-haspopup="true" aria-expanded="false">
-                                        <i class="fa-solid fa-ellipsis-vertical"></i>
-                                    </a>
-                                    <div class="dropdown-menu dropdown-menu-end">
-                                        <a class="dropdown-item" href="#">View Detail</a>
-                                        <a class="dropdown-item" href="#">Clear All</a>
-                                        <a class="dropdown-item" href="#">Delete</a>
+                                <div class="">
+                                    <div class="mt-2">
+                                        <span
+                                            class="badge bg-purple-subtle text-purple px-2 py-1 fw-semibold ">Roles</span>
+                                        |
+                                        <p class="mb-0 text-muted fs-12 d-inline-block">26 March 2025</p>
                                     </div>
-                                </div>
-                                <img src="assets/images/logos/lang-logo/dropbox.png"
-                                    class="me-2 align-self-center thumb-xl" alt="...">
-                                <h5 class="fw-semibold mt-3 fs-14">Dropbox</h5>
-                                <div class="d-flex justify-content-between my-2">
-                                    <p class="text-muted mb-0 fs-13 fw-semibold"><span class="text-dark">68 </span>Files
-                                    </p>
-                                    <p class="text-muted mb-0 fs-13 fw-semibold"><span class="text-dark">500 </span>GB
-                                    </p>
-                                </div>
-                                <div class="d-flex align-items-center">
-                                    <div class="flex-grow-1 text-truncate">
+                                    <a href="#" class="d-block fs-22 fw-semibold text-body my-2 text-truncate">How does
+                                        cancer grow and spread?</a>
+                                    <p class="text-muted">It is a long established fact that a reader will be distracted
+                                        by the readable content of a page when looking at its layout.</p>
+                                    <hr class="hr-dashed">
+                                    <div class="d-flex justify-content-between">
                                         <div class="d-flex align-items-center">
-                                            <div class="progress bg-secondary-subtle w-100" style="height:5px;"
-                                                role="progressbar" aria-label="Success example" aria-valuenow="25"
-                                                aria-valuemin="0" aria-valuemax="100">
-                                                <div class="progress-bar bg-secondary" style="width: 15%"></div>
-                                            </div>
-                                            <small class="flex-shrink-1 ms-1">15%</small>
+                                           
+                                            <div class="flex-grow-1 ms-2 text-truncate text-start">
+                                                <h6 class="m-0 text-dark">Billy Pearson</h6>
+                                                <p class="mb-0 text-muted">by <a href="#">admin</a></p>
+                                            </div><!--end media-body-->
                                         </div>
-                                    </div><!--end media body-->
-                                </div><!--end media-->
+                                    </div>
+                                </div><!--end blog-card-->
                             </div><!--end card-body-->
                         </div><!--end card-->
                     </div> <!--end col-->
-                    <div class="col-md-6 col-lg-3">
-                        <div class="card">
-                            <div class="card-body">
-                                <div class="dropdown float-end">
-                                    <a href="#" class="text-muted fs-16 dropdown-toggle p-1 " data-bs-toggle="dropdown"
-                                        aria-haspopup="true" aria-expanded="false">
-                                        <i class="fa-solid fa-ellipsis-vertical"></i>
-                                    </a>
-                                    <div class="dropdown-menu dropdown-menu-end">
-                                        <a class="dropdown-item" href="#">View Detail</a>
-                                        <a class="dropdown-item" href="#">Clear All</a>
-                                        <a class="dropdown-item" href="#">Delete</a>
-                                    </div>
-                                </div>
-                                <img src="assets/images/logos/lang-logo/onedrive.png"
-                                    class="me-2 align-self-center thumb-xl" alt="...">
-                                <h5 class="fw-semibold mt-3 fs-14">Onedrive</h5>
-                                <div class="d-flex justify-content-between my-2">
-                                    <p class="text-muted mb-0 fs-13 fw-semibold"><span class="text-dark">192
-                                        </span>Files</p>
-                                    <p class="text-muted mb-0 fs-13 fw-semibold"><span class="text-dark">500 </span>GB
-                                    </p>
-                                </div>
-                                <div class="d-flex align-items-center">
-                                    <div class="flex-grow-1 text-truncate">
-                                        <div class="d-flex align-items-center">
-                                            <div class="progress bg-secondary-subtle w-100" style="height:5px;"
-                                                role="progressbar" aria-label="Success example" aria-valuenow="25"
-                                                aria-valuemin="0" aria-valuemax="100">
-                                                <div class="progress-bar bg-secondary" style="width: 48%"></div>
-                                            </div>
-                                            <small class="flex-shrink-1 ms-1">48%</small>
-                                        </div>
-                                    </div><!--end media body-->
-                                </div><!--end media-->
-                            </div><!--end card-body-->
-                        </div><!--end card-->
-                    </div> <!--end col-->
-                    <div class="col-md-6 col-lg-3">
-                        <div class="card">
-                            <div class="card-body">
-                                <div class="dropdown float-end">
-                                    <a href="#" class="text-muted fs-16 dropdown-toggle p-1" data-bs-toggle="dropdown"
-                                        aria-haspopup="true" aria-expanded="false">
-                                        <i class="fa-solid fa-ellipsis-vertical"></i>
-                                    </a>
-                                    <div class="dropdown-menu dropdown-menu-end">
-                                        <a class="dropdown-item" href="#">View Detail</a>
-                                        <a class="dropdown-item" href="#">Clear All</a>
-                                        <a class="dropdown-item" href="#">Delete</a>
-                                    </div>
-                                </div>
-                                <img src="assets/images/logos/lang-logo/server.png"
-                                    class="me-2 align-self-center thumb-xl" alt="...">
-                                <h5 class="fw-semibold mt-3 fs-14">Server</h5>
-                                <div class="d-flex justify-content-between my-2">
-                                    <p class="text-muted mb-0 fs-13 fw-semibold"><span class="text-dark">81 </span>Files
-                                    </p>
-                                    <p class="text-muted mb-0 fs-13 fw-semibold"><span class="text-dark">500 </span>GB
-                                    </p>
-                                </div>
-                                <div class="d-flex align-items-center">
-                                    <div class="flex-grow-1 text-truncate">
-                                        <div class="d-flex align-items-center">
-                                            <div class="progress bg-secondary-subtle w-100" style="height:5px;"
-                                                role="progressbar" aria-label="Success example" aria-valuenow="25"
-                                                aria-valuemin="0" aria-valuemax="100">
-                                                <div class="progress-bar bg-secondary" style="width: 76%"></div>
-                                            </div>
-                                            <small class="flex-shrink-1 ms-1">76%</small>
-                                        </div>
-                                    </div><!--end media body-->
-                                </div><!--end media-->
-                            </div><!--end card-body-->
-                        </div><!--end card-->
-                    </div> <!--end col-->
+                  
                 </div><!--end row-->
-                <div class="row justify-content-center">
-                    <div class="col-12">
-                        <div class="clearfix">
-                            <div class="mb-3">
-                                <label for="categorySelect" class="form-label">Select Category</label>
-                                <select id="categorySelect" class="form-select">
-                                    <option value="">Select Category</option>
-                                </select>
-                            </div>
 
-                            <div class="btn-group float-end ms-2">
 
-                                <button type="button" class="btn btn-secondary me-0 overflow-hidden"
-                                    id="uploadFileButton">
-                                    Upload File
-                                    <input type="file" name="file" id="fileUploadInput" style="display:none;" multiple
-                                        class="overflow-hidden position-absolute top-0 start-0 opacity-0" />
-                                </button>
-                            </div>
-                            <ul class="nav nav-tabs my-4" role="tablist">
-                                <li class="nav-item">
-                                    <a class="nav-link fw-semibold active py-2" data-bs-toggle="tab" href="#documents"
-                                        role="tab" aria-selected="true">
-                                        <i class="fa-regular fa-folder-open me-1"></i>
-                                        <span data-documents-count>Documents 0</span>
-                                    </a>
-                                </li>
-                            </ul>
-                        </div>
-
-                        <div class="card">
-                            <div class="card-header">
-                                <div class="row align-items-center">
-                                    <div class="col">
-                                        <h4 class="card-title">Files</h4>
-                                    </div><!--end col-->
-                                    <div class="col-auto">
-                                        <div class="dropdown">
-                                            <a href="#" class="text-body text-decoration-underline">
-                                                View All
-                                            </a>
-                                        </div>
-                                    </div><!--end col-->
-                                </div> <!--end row-->
-                            </div><!--end card-header-->
-                            <div class="card-body pt-0">
-                                <!-- Tab panes -->
-                                <div class="tab-content">
-                                    <div class="tab-pane active" id="documents" role="tabpanel">
-                                        <div class="table-responsive browser_users">
-                                            <table class="table mb-0">
-                                                <thead class="table-light">
-                                                    <tr>
-                                                        <th class="border-top-0">Name</th>
-                                                        <th class="border-top-0 text-end">Last Modified</th>
-                                                        <th class="border-top-0 text-end">Size</th>
-                                                        <th class="border-top-0 text-end">By</th>
-                                                        <th class="border-top-0 text-end">Action</th>
-                                                    </tr><!--end tr-->
-                                                </thead>
-                                                <tbody id="documents-table-body">
-                                                    <tr>
-                                                        <td>
-                                                            <div
-                                                                class="d-inline-flex justify-content-center align-items-center thumb-md bg-blue-subtle rounded mx-auto me-1">
-                                                                <i
-                                                                    class="fa-solid fa-file-pdf fs-18 align-self-center mb-0 text-blue"></i>
-                                                            </div>
-                                                            <a href="#" class="text-body">payment.pdf</a>
-                                                        </td>
-                                                        <td class="text-end">18 Jul 2024</td>
-                                                        <td class="text-end"> 2.3 MB</td>
-                                                        <td class="text-end">
-                                                            <div class="img-group d-flex justify-content-end">
-                                                                <a class="user-avatar position-relative d-inline-block"
-                                                                    href="#">
-                                                                </a>
-                                                            </div>
-                                                        </td>
-                                                        <td class="text-end">
-                                                            <a href="#"><i
-                                                                    class="las la-info-circle text-secondary fs-18"></i></a>
-                                                        </td>
-                                                    </tr>
-                                                </tbody>
-                                            </table> <!--end table-->
-                                        </div><!--end /div-->
-                                    </div>
-                                </div>
-                            </div><!--end card-body-->
-                        </div><!--end card-->
-                    </div> <!--end col-->
-                </div><!--end row-->
             </div><!-- container -->
             <!--Start Rightbar-->
             <!--Start Rightbar/offcanvas-->
-
-
-            <!-- Upload Modal (optional, if you want a more styled approach) -->
-            <div class="modal fade" id="uploadModal" tabindex="-1" aria-labelledby="uploadModalLabel"
-                aria-hidden="true">
-                <div class="modal-dialog">
-                    <div class="modal-content">
-                        <div class="modal-header">
-                            <h5 class="modal-title" id="uploadModalLabel">Upload Files to Google Drive</h5>
-                            <button type="button" class="btn-close" data-bs-dismiss="modal" aria-label="Close"></button>
-                        </div>
-                        <div class="modal-body">
-                            <input type="file" id="modalFileUploadInput" class="form-control" multiple>
-                        </div>
-                        <div class="modal-footer">
-                            <button type="button" class="btn btn-secondary" data-bs-dismiss="modal">Cancel</button>
-                            <button type="button" class="btn btn-primary" id="uploadFilesBtn">Upload</button>
-                        </div>
-                    </div>
-                </div>
-            </div>
-
-
-
             <div class="offcanvas offcanvas-end" tabindex="-1" id="Appearance" aria-labelledby="AppearanceLabel">
                 <div class="offcanvas-header border-bottom justify-content-between">
                     <h5 class="m-0 font-14" id="AppearanceLabel">Appearance</h5>
@@ -625,7 +382,6 @@
             <!--end Rightbar/offcanvas-->
             <!--end Rightbar-->
             <!--Start Footer-->
-
             <footer class="footer text-center text-sm-start d-print-none">
                 <div class="container-fluid">
                     <div class="row">
@@ -660,15 +416,15 @@
     <script src="assets/libs/simplebar/simplebar.min.js"></script>
 
     <script src="assets/js/app.js"></script>
+    <script src="https://cdn.jsdelivr.net/npm/sweetalert2@11"></script>
 
-    <!-- my js -->
-    <script src="https://cdn.jsdelivr.net/npm/sweetalert2@11/dist/sweetalert2.all.min.js"></script>
 
-    <script src="Fetch/Files2.js"></script>
+
     <script src="Fetch/Shared.js"></script>
+    <script src="https://cdn.jsdelivr.net/npm/sweetalert2@11"></script>
+    <script src="Fetch/Roles.js"></script>
 </body>
 <!--end body-->
 
-<!-- Mirrored from mannatthemes.com/mifty/default/advanced-files.html by HTTrack Website Copier/3.x [XR&CO'2014], Mon, 17 Mar 2025 18:13:54 GMT -->
 
 </html>
