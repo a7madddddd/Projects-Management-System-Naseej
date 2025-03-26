@@ -160,23 +160,111 @@ class FileRenderer {
 
         return extensionMap[extension] || extensionMap['default'];
     }
+    decodeToken(token) {
+        try {
+            // If the token is passed directly
+            if (!token) {
+                console.error('No token provided');
+                return { roles: [] };
+            }
 
+            // Use the built-in JWT decoding
+            const base64Url = token.split('.')[1];
+            const base64 = base64Url.replace('-', '+').replace('_', '/');
+            const payload = JSON.parse(window.atob(base64));
+
+            // Return an object with roles
+            return {
+                roles: payload['http://schemas.microsoft.com/ws/2008/06/identity/claims/role']
+                    ? [payload['http://schemas.microsoft.com/ws/2008/06/identity/claims/role']]
+                    : []
+            };
+        } catch (error) {
+            console.error('Error decoding token:', error);
+            return { roles: [] };
+        }
+    }
     // Create action buttons
     createActionButtons(file) {
-        return `
+        // Get the user's roles from the token
+        const token = sessionStorage.getItem('authToken');
+        const decodedToken = this.decodeToken(token);
+        const userRoles = decodedToken.roles || [];
+
+        // Define role-based permissions with more precise access
+        const permissions = {
+            'SuperAdmin': ['view', 'download', 'update', 'delete', 'upload'],
+            'Admin': ['view', 'download', 'update', 'delete'],
+            'Editor': ['view', 'download', 'update'],
+            'Uploader': ['view', 'download', 'upload'],
+            'Viewer': ['view', 'download']
+        };
+
+        // Determine available actions based on user's role
+        const availableActions = this.getAvailableActions(userRoles, permissions);
+
+        // Generate action buttons based on available actions
+        let actionButtons = '';
+
+        if (availableActions.includes('view')) {
+            actionButtons += `
             <a href="#" onclick="viewFileDetails('${file.googleDriveFileId}')">
                 <i class="las la-info-circle text-secondary fs-18"></i>
             </a>
+        `;
+        }
+
+        if (availableActions.includes('download')) {
+            actionButtons += `
             <a href="#" onclick="downloadFile('${file.googleDriveFileId}')">
                 <i class="las la-download text-secondary fs-18"></i>
             </a>
+        `;
+        }
+
+        if (availableActions.includes('update')) {
+            actionButtons += `
             <a href="#" onclick="updateFile('${file.googleDriveFileId}')">
                 <i class="las la-pen text-secondary fs-18"></i>
             </a>
+        `;
+        }
+
+        if (availableActions.includes('delete')) {
+            actionButtons += `
             <a href="#" onclick="deleteFile('${file.googleDriveFileId}')">
                 <i class="las la-trash-alt text-secondary fs-18"></i>
             </a>
         `;
+        }
+
+        return actionButtons || '<span class="text-muted">No actions</span>';
+    }
+
+    // Helper method to get available actions
+    getAvailableActions(userRoles, permissions) {
+        // Collect all possible actions for the user's roles
+        const actions = userRoles.flatMap(role => {
+            // Normalize role name (in case of case differences)
+            const normalizedRole = role.charAt(0).toUpperCase() + role.slice(1).toLowerCase();
+            return permissions[normalizedRole] || [];
+        });
+
+        // Remove duplicates and return unique actions
+        return [...new Set(actions)];
+    }
+
+
+
+    // Helper method to get available actions based on user roles
+    getAvailableActions(userRoles, permissions) {
+        // Collect all possible actions for the user's roles
+        const actions = userRoles.flatMap(role =>
+            permissions[role] || []
+        );
+
+        // Remove duplicates and return unique actions
+        return [...new Set(actions)];
     }
 
     // Format date
@@ -723,6 +811,19 @@ class FileUploadHandler {
             fileInput.addEventListener('change', (e) => this.handleFileSelection(e));
 
             uploadButton.addEventListener('click', () => {
+                // Check if user has upload permissions
+                if (!this.checkUploadPermission()) {
+                    // Show sweet alert for insufficient permissions
+                    Swal.fire({
+                        icon: 'error',
+                        title: 'Upload Not Allowed',
+                        text: 'You do not have permission to upload files. Contact your administrator.',
+                        confirmButtonColor: '#3085d6',
+                        confirmButtonText: 'OK'
+                    });
+                    return;
+                }
+
                 // Only allow file selection if a category is selected
                 if (this.selectedCategory) {
                     fileInput.click();
@@ -736,6 +837,58 @@ class FileUploadHandler {
             });
         } else {
             console.error('File upload elements not found');
+        }
+    }
+
+    // Add this method to the class
+    checkUploadPermission() {
+        try {
+            // Get the token from session storage
+            const token = sessionStorage.getItem('authToken');
+
+            // If no token, return false
+            if (!token) {
+                console.error('No authentication token found');
+                return false;
+            }
+
+            // Decode the token
+            const decodedToken = this.decodeToken(token);
+
+            // Get user roles
+            const userRoles = decodedToken.roles || [];
+
+            // Roles allowed to upload
+            const uploadRoles = ['SuperAdmin', 'Admin', 'Uploader', 'Editor'];
+
+            // Check if user has upload permission
+            return userRoles.some(role => uploadRoles.includes(role));
+        } catch (error) {
+            console.error('Error checking upload permission:', error);
+            return false;
+        }
+    }
+
+    // Existing token decoding method
+    decodeToken(token) {
+        try {
+            if (!token) {
+                console.error('No token provided');
+                return { roles: [] };
+            }
+
+            const base64Url = token.split('.')[1];
+            const base64 = base64Url.replace('-', '+').replace('_', '/');
+            const payload = JSON.parse(window.atob(base64));
+
+            return {
+                roles: payload['http://schemas.microsoft.com/ws/2008/06/identity/claims/role']
+                    ? [payload['http://schemas.microsoft.com/ws/2008/06/identity/claims/role']]
+                    : []
+            };
+        } catch (error) {
+            console.error('Error decoding token:', error);
+            return { roles: [] };
         }
     }
 
