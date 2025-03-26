@@ -380,3 +380,149 @@ document.addEventListener('DOMContentLoaded', function () {
     // Optional: Refresh every 5 minutes
     setInterval(fetchRecentFiles, 5 * 60 * 1000);
 });
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+document.addEventListener('DOMContentLoaded', function () {
+    const searchInput = document.querySelector('input[placeholder="Search here..."]');
+    const token = sessionStorage.getItem('authToken');
+
+    // Debounce function
+    function debounce(func, delay) {
+        let timeoutId;
+        return function () {
+            const context = this;
+            const args = arguments;
+            clearTimeout(timeoutId);
+            timeoutId = setTimeout(() => {
+                func.apply(context, args);
+            }, delay);
+        };
+    }
+
+    // Create search results container
+    function createSearchResultsContainer() {
+        let container = document.getElementById('searchResultsContainer');
+        if (!container) {
+            container = document.createElement('div');
+            container.id = 'searchResultsContainer';
+            container.className = 'search-results-container';
+            container.style.cssText = `
+                position: absolute;
+                top: 100%;
+                left: 0;
+                width: 100%;
+                background: #1e1e2d;
+                border: 1px solid #2c2c3a;
+                border-top: none;
+                z-index: 1000;
+                display: none;
+                border-radius: 0 0 8px 8px;
+                box-shadow: 0 4px 6px rgba(0,0,0,0.1);
+            `;
+            searchInput.parentElement.style.position = 'relative';
+            searchInput.parentElement.appendChild(container);
+        }
+        return container;
+    }
+
+    // Perform search
+    const performSearch = debounce(function () {
+        const searchTerm = searchInput.value.trim().toLowerCase();
+
+        if (searchTerm.length < 2) {
+            const container = document.getElementById('searchResultsContainer');
+            if (container) container.style.display = 'none';
+            return;
+        }
+
+        // Fetch roles for search
+        fetch('https://localhost:44320/api/Roles', {
+            method: 'GET',
+            headers: {
+                'Authorization': `Bearer ${token}`,
+                'accept': 'text/plain'
+            }
+        })
+            .then(response => response.json())
+            .then(roles => {
+                // Filter roles based on search term
+                const filteredRoles = roles.filter(role =>
+                    role.roleName.toLowerCase().includes(searchTerm) ||
+                    role.description.toLowerCase().includes(searchTerm)
+                );
+
+                // Render search results
+                renderSearchResults(filteredRoles);
+            })
+            .catch(error => {
+                console.error('Search error:', error);
+            });
+    }, 300);
+
+    // Render search results
+    function renderSearchResults(results) {
+        const container = createSearchResultsContainer();
+        container.innerHTML = ''; // Clear previous results
+        container.style.display = results.length ? 'block' : 'none';
+
+        // Render results
+        results.forEach(role => {
+            const resultItem = document.createElement('div');
+            resultItem.className = 'search-result-item';
+            resultItem.style.cssText = `
+                display: flex;
+                align-items: center;
+                padding: 10px;
+                border-bottom: 1px solid #2c2c3a;
+                cursor: pointer;
+            `;
+
+            resultItem.innerHTML = `
+                <div class="result-icon me-3">
+                    <i class="fas fa-file text-primary"></i>
+                </div>
+                <div class="result-content">
+                    <h6 class="m-0 text-white">${role.roleName}</h6>
+                    <small class="text-muted">${role.description}</small>
+                </div>
+            `;
+
+            // Click handler
+            resultItem.addEventListener('click', () => {
+                console.log('Selected role:', role);
+            });
+
+            container.appendChild(resultItem);
+        });
+
+        // Close dropdown when clicking outside
+        function closeDropdownHandler(e) {
+            if (!container.contains(e.target) && e.target !== searchInput) {
+                container.style.display = 'none';
+                document.removeEventListener('click', closeDropdownHandler);
+            }
+        }
+
+        // Add delay to prevent immediate closure
+        setTimeout(() => {
+            document.addEventListener('click', closeDropdownHandler);
+        }, 0);
+    }
+
+    // Add event listener to search input
+    searchInput.addEventListener('input', performSearch);
+});
