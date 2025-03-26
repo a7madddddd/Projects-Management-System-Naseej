@@ -315,23 +315,30 @@ namespace Projects_Management_System_Naseej.Controllers
         [HttpPost("verify-reset-otp")]
         public async Task<IActionResult> VerifyResetOtp([FromBody] OtpVerificationDto model)
         {
+            // Log comprehensive details about the verification attempt
+            _logger.LogInformation($"OTP Verification Attempt:");
+            _logger.LogInformation($"Email: {model.Email}");
+            _logger.LogInformation($"OTP: {model.Otp}");
+
             // Validate OTP
             bool isValid = await _otpRepository.ValidateOtpAsync(model.Email, model.Otp);
+
             if (!isValid)
             {
+                _logger.LogWarning($"OTP Validation Failed for email: {model.Email}");
                 return BadRequest(new { Message = "Invalid or expired OTP" });
             }
 
             // Generate temporary token for password reset
-            var resetToken = TokenGenerator.GeneratePasswordResetToken(model.Email, _configuration);
+            var resetToken = OtpGenerator.GeneratePasswordResetToken(model.Email, _configuration);
 
+            _logger.LogInformation($"OTP Validated Successfully - Email: {model.Email}");
             return Ok(new
             {
                 Message = "OTP verified successfully",
                 ResetToken = resetToken
             });
         }
-
         [HttpGet("email-test")]
         public async Task<IActionResult> TestEmailSending(string email)
         {

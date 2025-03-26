@@ -435,6 +435,11 @@ namespace Projects_Management_System_Naseej.Implementations
             return await _context.Users
                                  .FirstOrDefaultAsync(u => u.Email == email);
         }
+
+        public async Task<User?> FindByEmailAsync(string email)
+        {
+            return await _context.Users.FirstOrDefaultAsync(u => u.Email == email);
+        }
     }
 }
 

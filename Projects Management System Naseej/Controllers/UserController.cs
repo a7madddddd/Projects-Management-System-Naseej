@@ -8,6 +8,7 @@ using System.Security.Claims;
 using System;
 using System.Security.Cryptography;
 using System.Text;
+using Projects_Management_System_Naseej.DTOs.OtpRecord;
 
 namespace Projects_Management_System_Naseej.Controllers
 {
@@ -170,7 +171,53 @@ namespace Projects_Management_System_Naseej.Controllers
                 return BitConverter.ToString(hashedBytes).Replace("-", "").ToLower();
             }
         }
+        [HttpPost("otp-reset-password")]
+        public async Task<IActionResult> OtpResetPassword([FromBody] OtpResetPasswordRequest otpResetPasswordDto)
+        {
+            try
+            {
+                // Validate input
+                if (otpResetPasswordDto == null)
+                {
+                    return BadRequest(new { Message = "Request body is empty" });
+                }
 
+                // Validate input fields
+                if (otpResetPasswordDto.UserId <= 0 ||
+                    string.IsNullOrEmpty(otpResetPasswordDto.NewPassword) ||
+                    string.IsNullOrEmpty(otpResetPasswordDto.ConfirmPassword))
+                {
+                    return BadRequest(new { Message = "All password fields are required" });
+                }
+
+                // Find the user
+                var user = await _context.Users.FindAsync(otpResetPasswordDto.UserId);
+                if (user == null)
+                {
+                    return NotFound(new { Message = "User not found" });
+                }
+
+                // Validate new password
+                if (otpResetPasswordDto.NewPassword != otpResetPasswordDto.ConfirmPassword)
+                {
+                    return BadRequest(new { Message = "New passwords do not match" });
+                }
+
+                // Hash new password
+                string newHashedPassword = HashPassword(otpResetPasswordDto.NewPassword);
+
+                // Update password
+                user.PasswordHash = newHashedPassword;
+                user.UpdatedDate = DateTime.UtcNow;
+
+                await _context.SaveChangesAsync();
+                return Ok(new { Message = "Password reset successfully" });
+            }
+            catch (Exception ex)
+            {
+                return StatusCode(500, new { Message = ex.Message });
+            }
+        }
 
 
         [HttpDelete("{userId}")]
@@ -290,6 +337,24 @@ namespace Projects_Management_System_Naseej.Controllers
                 CurrentTime = currentTime
             });
         }
+
+        [HttpPost("get-user-id")]
+        public async Task<IActionResult> GetUserIdByEmail([FromBody] EmailDto emailDto)
+        {
+            if (string.IsNullOrWhiteSpace(emailDto.Email))
+            {
+                return BadRequest(new { message = "Email is required" });
+            }
+
+            var user = await _userRepository.FindByEmailAsync(emailDto.Email);
+            if (user == null)
+            {
+                return NotFound(new { message = "User not found" });
+            }
+
+            return Ok(new { userId = user.UserId });
+        }
+
     }
 }
 

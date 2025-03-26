@@ -19,46 +19,41 @@ public class EmailService : IEmailService
     {
         try
         {
-            // Retrieve SMTP configuration
             var smtpHost = _configuration["Smtp:Host"];
-            var smtpPort = _configuration["Smtp:Port"];
+            var smtpPort = int.Parse(_configuration["Smtp:Port"]);
             var smtpUsername = _configuration["Smtp:Username"];
             var smtpPassword = _configuration["Smtp:Password"];
-            var smtpFromEmail = _configuration["Smtp:FromEmail"];
+            var smtpFromEmail = _configuration["Smtp:FromEmail"].TrimEnd(',');
 
-            // Comprehensive configuration logging
-            _logger.LogInformation("SMTP Configuration Details:");
-            _logger.LogInformation($"Host: {smtpHost}");
-            _logger.LogInformation($"Port: {smtpPort}");
-            _logger.LogInformation($"Username: {smtpUsername}");
-            _logger.LogInformation($"From Email: {smtpFromEmail}");
-
-            // Validate configuration
+            // Validate configuration more strictly
             if (string.IsNullOrWhiteSpace(smtpHost) ||
-                string.IsNullOrWhiteSpace(smtpPort) ||
+                smtpPort <= 0 ||
                 string.IsNullOrWhiteSpace(smtpUsername) ||
                 string.IsNullOrWhiteSpace(smtpPassword) ||
                 string.IsNullOrWhiteSpace(smtpFromEmail))
             {
-                _logger.LogError("Incomplete SMTP configuration");
+                _logger.LogError("Incomplete or invalid SMTP configuration");
                 return false;
             }
 
-            // Create SMTP client with detailed configuration
             using (var smtpClient = new SmtpClient(smtpHost)
             {
-                Port = int.Parse(smtpPort),
+                Port = smtpPort,
                 Credentials = new NetworkCredential(smtpUsername, smtpPassword),
                 EnableSsl = true,
                 DeliveryMethod = SmtpDeliveryMethod.Network,
-                Timeout = 20000 // 20 seconds timeout
+                Timeout = 20000
             })
             {
-                // Optional: Add certificate validation callback
+                // More secure certificate validation
                 ServicePointManager.ServerCertificateValidationCallback =
-                    (sender, certificate, chain, sslPolicyErrors) => true;
+                    (object sender, X509Certificate certificate, X509Chain chain, SslPolicyErrors sslPolicyErrors) =>
+                    {
+                        // Log certificate validation details
+                        _logger.LogInformation($"Certificate Validation: {sslPolicyErrors}");
+                        return sslPolicyErrors == SslPolicyErrors.None;
+                    };
 
-                // Prepare email message
                 var mailMessage = new MailMessage
                 {
                     From = new MailAddress(smtpFromEmail, "Naseej Password Reset"),
@@ -81,7 +76,6 @@ public class EmailService : IEmailService
 
                 try
                 {
-                    // Send email with comprehensive error handling
                     _logger.LogInformation($"Attempting to send email to {email}");
 
                     await Task.Run(() => smtpClient.Send(mailMessage));
@@ -95,7 +89,6 @@ public class EmailService : IEmailService
                     _logger.LogError($"SMTP Status Code: {smtpEx.StatusCode}");
                     _logger.LogError($"SMTP Error Message: {smtpEx.Message}");
 
-                    // Additional inner exception logging
                     if (smtpEx.InnerException != null)
                     {
                         _logger.LogError($"Inner Exception: {smtpEx.InnerException.GetType().Name}");
@@ -107,18 +100,6 @@ public class EmailService : IEmailService
                 catch (Exception ex)
                 {
                     _logger.LogError(ex, $"Comprehensive error sending email to {email}");
-
-                    // Log all exception details
-                    _logger.LogError($"Exception Type: {ex.GetType().Name}");
-                    _logger.LogError($"Exception Message: {ex.Message}");
-
-                    // Log inner exception if exists
-                    if (ex.InnerException != null)
-                    {
-                        _logger.LogError($"Inner Exception Type: {ex.InnerException.GetType().Name}");
-                        _logger.LogError($"Inner Exception Message: {ex.InnerException.Message}");
-                    }
-
                     return false;
                 }
             }

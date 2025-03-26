@@ -19,6 +19,7 @@ namespace Projects_Management_System_Naseej.Repositories
         Task<bool> ResetPasswordAsync(int userId, string currentPasswordHash, string newPasswordHash);
         string HashPassword(string password);
         Task<User> GetByEmailAsync(string email);
+        Task<User?> FindByEmailAsync(string email);
 
     }
 }
