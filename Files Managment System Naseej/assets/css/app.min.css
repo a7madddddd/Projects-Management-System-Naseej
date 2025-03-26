@@ -4200,16 +4200,3 @@ ul.listree-submenu-items li a {
   padding-bottom: 12px;
 }
 
-.naseej_logo img{
-    margin-left: 0 !important;
-    padding-left: 0 !important;
-    width: 25% !important;
-    border-radius: 50%;
-    height:5vh !important;
-}
-.naseej_logo span {
-    font-size: large;
-    font-weight: bold;
-    margin-left: 4px !important;
-}
-/*# sourceMappingURL=app.min.css.map */

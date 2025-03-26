@@ -170,7 +170,6 @@ document.getElementById('resetButton').addEventListener('click', function () {
                             title: 'Password Reset',
                             text: 'Your password has been successfully reset!'
                         }).then(() => {
-                            // إعادة التوجيه إلى صفحة تسجيل الدخول
                             window.location.href = "auth-login.html";
                         });
                     }
