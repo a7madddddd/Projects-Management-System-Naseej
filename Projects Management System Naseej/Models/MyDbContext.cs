@@ -23,6 +23,8 @@ public partial class MyDbContext : DbContext
 
     public virtual DbSet<FilePermission> FilePermissions { get; set; }
 
+    public virtual DbSet<OtpRecord> OtpRecords { get; set; }
+
     public virtual DbSet<Role> Roles { get; set; }
 
     public virtual DbSet<User> Users { get; set; }
@@ -114,6 +116,19 @@ public partial class MyDbContext : DbContext
                 .HasForeignKey(d => d.RoleId)
                 .OnDelete(DeleteBehavior.ClientSetNull)
                 .HasConstraintName("FK__FilePermi__RoleI__5629CD9C");
+        });
+
+        modelBuilder.Entity<OtpRecord>(entity =>
+        {
+            entity.HasKey(e => e.Id).HasName("PK__OtpRecor__3214EC070E621880");
+
+            entity.HasIndex(e => new { e.Email, e.IsUsed, e.ExpiresAt }, "IX_OtpRecords_Email_IsUsed_ExpiresAt");
+
+            entity.HasIndex(e => new { e.Email, e.IsUsed }, "UC_OtpRecords_Email_IsUsed").IsUnique();
+
+            entity.Property(e => e.CreatedAt).HasDefaultValueSql("(getutcdate())");
+            entity.Property(e => e.Email).HasMaxLength(255);
+            entity.Property(e => e.Otp).HasMaxLength(10);
         });
 
         modelBuilder.Entity<Role>(entity =>

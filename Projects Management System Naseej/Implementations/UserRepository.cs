@@ -427,6 +427,14 @@ namespace Projects_Management_System_Naseej.Implementations
                 return BitConverter.ToString(hashedBytes).Replace("-", "").ToLower();
             }
         }
+
+        // Asynchronous method to get a user by email
+        public async Task<User> GetByEmailAsync(string email)
+        {
+            // Use FirstOrDefaultAsync to retrieve the user with the given email
+            return await _context.Users
+                                 .FirstOrDefaultAsync(u => u.Email == email);
+        }
     }
 }
 

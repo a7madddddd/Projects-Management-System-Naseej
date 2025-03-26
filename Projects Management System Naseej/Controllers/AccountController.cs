@@ -15,7 +15,8 @@ using static Projects_Management_System_Naseej.Controllers.FilesController;
 using Microsoft.AspNetCore.Diagnostics;
 using Projects_Management_System_Naseej.Models;
 using Projects_Management_System_Naseej.Services;
-
+using Projects_Management_System_Naseej.DTOs.OtpRecord;
+using Projects_Management_System_Naseej.Implementations;
 namespace Projects_Management_System_Naseej.Controllers
 {
     [Route("api/[controller]")]
@@ -27,13 +28,20 @@ namespace Projects_Management_System_Naseej.Controllers
         private readonly IConfiguration _configuration;
         private readonly ILogger<AccountController> _logger;
         private readonly MyDbContext _context;
-        public AccountController(IUserRepository userRepository, IRoleRepository roleRepository, IConfiguration configuration , ILogger<AccountController> logger, MyDbContext context)
+        private readonly IEmailService _emailService;
+        private readonly IOtpRepository _otpRepository;
+
+        public AccountController(IUserRepository userRepository, IRoleRepository roleRepository, IConfiguration configuration , ILogger<AccountController> logger, MyDbContext context,
+              IEmailService emailService,
+        IOtpRepository otpRepository)
         {
             _userRepository = userRepository;
             _roleRepository = roleRepository;
             _configuration = configuration;
             _logger = logger;
             _context = context;
+            _emailService = emailService;
+            _otpRepository = otpRepository;
         }
 
         [HttpPost("login")]
@@ -247,6 +255,96 @@ namespace Projects_Management_System_Naseej.Controllers
         }
             });
         }
+
+
+
+
+
+        [HttpPost("send-reset-otp")]
+        public async Task<IActionResult> SendResetOtp([FromBody] EmailDto model)
+        {
+            try
+            {
+                // Validate input
+                if (model == null || string.IsNullOrWhiteSpace(model.Email))
+                {
+                    _logger.LogWarning("Send reset OTP called with null or empty email");
+                    return BadRequest(new { Message = "Email is required" });
+                }
+
+                // Log the attempt
+                _logger.LogInformation($"Password reset OTP requested for email: {model.Email}");
+
+                // Validate email exists
+                var user = await _userRepository.GetByEmailAsync(model.Email);
+                if (user == null)
+                {
+                    _logger.LogWarning($"Password reset attempt for non-existent email: {model.Email}");
+                    return NotFound(new { Message = "Email not found" });
+                }
+
+                // Generate OTP
+                string otp = OtpGenerator.GenerateOtp();
+                _logger.LogInformation($"Generated OTP for email: {model.Email}");
+
+                // Store OTP
+                bool otpStored = await _otpRepository.StoreOtpAsync(model.Email, otp);
+                if (!otpStored)
+                {
+                    _logger.LogError($"Failed to store OTP for email: {model.Email}");
+                    return StatusCode(500, new { Message = "Failed to generate OTP" });
+                }
+
+                try
+                {
+                    // Send OTP via email
+                    bool otpSent = await _emailService.SendPasswordResetOtpAsync(model.Email, otp);
+                    if (!otpSent)
+                    {
+                        _logger.LogError($"Failed to send OTP to email: {model.Email}");
+                        return StatusCode(500, new { Message = "Failed to send OTP" });
+                    }
+                }
+                catch (Exception emailEx)
+                {
+                    _logger.LogError(emailEx, $"Exception occurred while sending OTP to email: {model.Email}");
+                    return StatusCode(500, new { Message = "Failed to send OTP due to email service error" });
+                }
+
+                return Ok(new { Message = "OTP sent successfully" });
+            }
+            catch (Exception ex)
+            {
+                // Log the full exception details
+                _logger.LogError(ex, $"Unexpected error in SendResetOtp for email: {model.Email}");
+                return StatusCode(500, new { Message = "An unexpected error occurred" });
+            }
+        }
+
+        [HttpPost("verify-reset-otp")]
+        public async Task<IActionResult> VerifyResetOtp([FromBody] OtpVerificationDto model)
+        {
+            // Validate OTP
+            bool isValid = await _otpRepository.ValidateOtpAsync(model.Email, model.Otp);
+            if (!isValid)
+            {
+                return BadRequest(new { Message = "Invalid or expired OTP" });
+            }
+
+            // Generate temporary token for password reset
+            var resetToken = TokenGenerator.GeneratePasswordResetToken(model.Email, _configuration);
+
+            return Ok(new
+            {
+                Message = "OTP verified successfully",
+                ResetToken = resetToken
+            });
+        }
+
+
+
+
+
 
 
         private string HashPassword(string password)

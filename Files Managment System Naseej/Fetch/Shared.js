@@ -1,17 +1,26 @@
 function checkAuthentication() {
     const token = sessionStorage.getItem('authToken');
+    const currentPage = window.location.pathname.split('/').pop();
 
-    // If no token, redirect to login page
-    if (!token) {
+    // List of pages that should be accessible without authentication
+    const publicPages = ['auth-login.html', 'auth-recover-pw.html'];
+
+    // If no token and not on a public page, redirect to login
+    if (!token && !publicPages.includes(currentPage)) {
         window.location.href = 'auth-login.html';
     }
+
+    // Optional: Redirect authenticated users away from login page
+    if (token && currentPage === 'auth-login.html') {
+        window.location.href = 'index.html'; // or your default authenticated page
+    }
 }
-// 
+
 // Perform initial check on page load
 document.addEventListener('DOMContentLoaded', checkAuthentication);
 
 // Check authentication every second
-setInterval(checkAuthentication, 100);
+setInterval(checkAuthentication, 1000);
 
 
 

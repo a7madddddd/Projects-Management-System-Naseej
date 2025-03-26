@@ -122,7 +122,8 @@ builder.Services.AddScoped<IFileTypeHandler, PdfHandler>();
 builder.Services.AddScoped<IFileTypeHandler, ExcelHandler>();
 builder.Services.AddScoped<MicrosoftGraphService>();
 builder.Services.AddScoped<GoogleDriveService>();
-
+builder.Services.AddScoped<IEmailService, EmailService>();
+builder.Services.AddScoped<IOtpRepository, OtpRepository>();
 
 // Add HttpContextAccessor (this can remain Transient)
 builder.Services.AddHttpContextAccessor();
