@@ -295,20 +295,12 @@ namespace Projects_Management_System_Naseej.Controllers
                     return StatusCode(500, new { Message = "Failed to generate OTP" });
                 }
 
-                try
+                // Send OTP via email
+                bool otpSent = await _emailService.SendPasswordResetOtpAsync(model.Email, otp);
+                if (!otpSent)
                 {
-                    // Send OTP via email
-                    bool otpSent = await _emailService.SendPasswordResetOtpAsync(model.Email, otp);
-                    if (!otpSent)
-                    {
-                        _logger.LogError($"Failed to send OTP to email: {model.Email}");
-                        return StatusCode(500, new { Message = "Failed to send OTP" });
-                    }
-                }
-                catch (Exception emailEx)
-                {
-                    _logger.LogError(emailEx, $"Exception occurred while sending OTP to email: {model.Email}");
-                    return StatusCode(500, new { Message = "Failed to send OTP due to email service error" });
+                    _logger.LogError($"Failed to send OTP to email: {model.Email}");
+                    return StatusCode(500, new { Message = "Failed to send OTP" });
                 }
 
                 return Ok(new { Message = "OTP sent successfully" });
@@ -320,7 +312,6 @@ namespace Projects_Management_System_Naseej.Controllers
                 return StatusCode(500, new { Message = "An unexpected error occurred" });
             }
         }
-
         [HttpPost("verify-reset-otp")]
         public async Task<IActionResult> VerifyResetOtp([FromBody] OtpVerificationDto model)
         {
