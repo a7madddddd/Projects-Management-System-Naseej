@@ -922,3 +922,154 @@ document.addEventListener('DOMContentLoaded', () => {
         });
     }
 });
+
+
+
+
+
+
+
+
+// Function to fetch Google Drive files and statistics
+// Function to fetch Google Drive files and statistics
+// Function to fetch Google Drive files and statistics
+async function fetchGoogleDriveFiles() {
+    try {
+        const authToken = sessionStorage.getItem('authToken');
+        if (!authToken) {
+            throw new Error('No authentication token found');
+        }
+
+        // Parallel API calls
+        const [
+            filesResponse,
+            documentsCountResponse
+        ] = await Promise.all([
+            fetch('https://localhost:44320/api/Files/list-files?PageNumber=1&PageSize=10', {
+                method: 'GET',
+                headers: {
+                    'Authorization': `Bearer ${authToken}`,
+                    'Accept': '*/*'
+                }
+            }),
+            fetch('https://localhost:44320/api/Files/documents-count', {
+                method: 'GET',
+                headers: {
+                    'Authorization': `Bearer ${authToken}`,
+                    'Accept': '*/*'
+                }
+            })
+        ]);
+
+        // Parse responses
+        const filesData = await filesResponse.json();
+        const documentsCountData = await documentsCountResponse.json();
+
+        // Update Google Drive section
+        updateGoogleDriveSection({
+            files: filesData.files,
+            totalDocuments: documentsCountData.totalDocuments
+        });
+
+    } catch (error) {
+        console.error('Error fetching Google Drive files:', error);
+    }
+}
+
+// Function to calculate total file size
+// Function to calculate total file size
+function updateGoogleDriveSection(data) {
+    // Total storage (fixed at 15 GB)
+    const TOTAL_STORAGE_GB = 15;
+    const TOTAL_STORAGE_KB = TOTAL_STORAGE_GB * 1024 * 1024; // Convert GB to KB
+
+    // Calculate current storage used in KB
+    const currentStorageKB = calculateTotalFileSize(data.files);
+
+    // Calculate usage percentage with high precision
+    const usagePercentage = Math.max(
+        Number(((currentStorageKB / TOTAL_STORAGE_KB) * 100).toFixed(4)),
+        0.01  // Ensure at least 0.01% is shown
+    );
+
+    // Create Google Drive card content
+    const googleDriveCard = document.getElementById('googleDriveCard');
+    if (!googleDriveCard) return;
+
+    // Update file count
+    const fileCountEl = googleDriveCard.querySelector('#googleDriveFileCount');
+    if (fileCountEl) fileCountEl.textContent = data.totalDocuments;
+
+    // Update storage information
+    const storageUsedEl = googleDriveCard.querySelector('#googleDriveStorageUsed');
+    if (storageUsedEl) storageUsedEl.textContent = `${currentStorageKB.toFixed(2)} / ${TOTAL_STORAGE_GB} GB`;
+
+    // Update progress bar
+    const progressBar = googleDriveCard.querySelector('#googleDriveProgressBar');
+    const progressContainer = googleDriveCard.querySelector('#googleDriveProgressContainer');
+    const progressPercentage = googleDriveCard.querySelector('#googleDriveProgressPercentage');
+
+    if (progressBar) {
+        // Force the width to be set with percentage, even for very small values
+        progressBar.style.width = `${usagePercentage}%`;
+    }
+
+    if (progressContainer) {
+        // Update aria attributes
+        progressContainer.setAttribute('aria-valuenow', usagePercentage);
+    }
+
+    if (progressPercentage) {
+        // Update percentage text
+        progressPercentage.textContent = `${usagePercentage}%`;
+    }
+
+    // Detailed logging for debugging
+    console.log('Storage Details:', {
+        currentStorageKB: currentStorageKB.toFixed(4),
+        totalStorageKB: TOTAL_STORAGE_KB,
+        usagePercentage: usagePercentage
+    });
+}
+
+// Ensure precise calculation of total file size
+function calculateTotalFileSize(files) {
+    // Convert bytes to KB with high precision
+    const totalSizeBytes = files.reduce((total, file) => total + (file.fileSize || 0), 0);
+    return totalSizeBytes / 1024;
+}
+
+// Ensure precise calculation of total file size
+function calculateTotalFileSize(files) {
+    // Convert bytes to KB with high precision
+    const totalSizeBytes = files.reduce((total, file) => total + (file.fileSize || 0), 0);
+    return totalSizeBytes / 1024;
+}
+
+
+// Function to update storage details
+function updateGoogleDriveStorageDetails(currentStorageKB, totalStorage) {
+    const googleDriveCard = document.getElementById('googleDriveCard');
+    if (!googleDriveCard) return;
+
+    // Find or create storage details container
+    let storageDetailsContainer = googleDriveCard.querySelector('.storage-details');
+    if (!storageDetailsContainer) {
+        storageDetailsContainer = document.createElement('div');
+        storageDetailsContainer.className = 'storage-details text-center mt-2';
+        googleDriveCard.querySelector('.card-body').appendChild(storageDetailsContainer);
+    }
+
+    // Update storage details
+    storageDetailsContainer.innerHTML = `
+        <small class="text-muted">${currentStorageKB.toFixed(2)} KB of ${totalStorage} GB used</small>
+    `;
+}
+
+// Run on page load
+document.addEventListener('DOMContentLoaded', () => {
+    fetchGoogleDriveFiles();
+
+    // Optional: Refresh files periodically
+    setInterval(fetchGoogleDriveFiles, 5 * 60 * 1000); // Every 5 minutes
+});
